@@ -11,11 +11,10 @@ anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 indicatif = "0.17"
-tokio = { version = "1", features = ["process", "fs", "io-util"] }
+tokio = { version = "1", features = ["process", "fs", "io-util", "rt-multi-thread", "macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-directories = "6"
 num_cpus = "1"
 reqwest = { version = "0.12", features = ["stream"] }
 futures-util = "0.3"
@@ -23,8 +22,6 @@ hound = "3"
 which = "7"
 ctrlc = "3"
 serde_json = "1"
-
-[dev-dependencies]
 tempfile = "3"
 
 [profile.release]

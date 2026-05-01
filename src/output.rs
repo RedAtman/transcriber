@@ -1,1 +1,199 @@
-// output module
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+
+/// Word-level timestamp
+#[derive(Debug, Clone, Serialize)]
+pub struct Word {
+    pub word: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+/// Single text segment
+#[derive(Debug, Clone, Serialize)]
+pub struct Segment {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    pub words: Vec<Word>,
+}
+
+/// Complete transcript result
+#[derive(Debug, Clone, Serialize)]
+pub struct Transcript {
+    pub file: String,
+    pub model: String,
+    pub language: String,
+    pub duration: f64,
+    pub segments: Vec<Segment>,
+    pub transcribed_at: DateTime<Utc>,
+}
+
+use crate::error::Result;
+
+/// Output format writer trait
+pub trait FormatWriter {
+    fn extension(&self) -> &'static str;
+    fn write(&self, transcript: &Transcript) -> Result<String>;
+}
+
+/// TXT format: one line of text per segment
+pub struct TxtFormat;
+
+impl FormatWriter for TxtFormat {
+    fn extension(&self) -> &'static str {
+        "txt"
+    }
+
+    fn write(&self, transcript: &Transcript) -> Result<String> {
+        let mut output = String::new();
+        for segment in &transcript.segments {
+            output.push_str(&segment.text);
+            output.push('\n');
+        }
+        Ok(output)
+    }
+}
+
+/// SRT format: subtitle index + timestamp + text
+pub struct SrtFormat;
+
+impl FormatWriter for SrtFormat {
+    fn extension(&self) -> &'static str {
+        "srt"
+    }
+
+    fn write(&self, transcript: &Transcript) -> Result<String> {
+        let mut output = String::new();
+        for (i, segment) in transcript.segments.iter().enumerate() {
+            let start = format_timestamp_srt(segment.start);
+            let end = format_timestamp_srt(segment.end);
+            output.push_str(&format!("{}\n{} --> {}\n{}\n\n", i + 1, start, end, segment.text));
+        }
+        Ok(output)
+    }
+}
+
+/// Convert seconds to SRT timestamp format (HH:MM:SS,mmm)
+fn format_timestamp_srt(seconds: f64) -> String {
+    let total_ms = (seconds * 1000.0) as u64;
+    let hours = total_ms / 3_600_000;
+    let minutes = (total_ms % 3_600_000) / 60_000;
+    let secs = (total_ms % 60_000) / 1000;
+    let millis = total_ms % 1000;
+    format!("{:02}:{:02}:{:02},{:03}", hours, minutes, secs, millis)
+}
+
+/// JSON format: structured data with metadata and word-level timing
+pub struct JsonFormat;
+
+impl FormatWriter for JsonFormat {
+    fn extension(&self) -> &'static str {
+        "json"
+    }
+
+    fn write(&self, transcript: &Transcript) -> Result<String> {
+        serde_json::to_string_pretty(transcript).map_err(|e| crate::error::AppError::Output {
+            message: format!("Failed to serialize JSON: {}", e),
+            path: None,
+        })
+    }
+}
+
+/// Get FormatWriter by format name
+pub fn get_format_writer(format: &str) -> Option<Box<dyn FormatWriter>> {
+    match format {
+        "txt" => Some(Box::new(TxtFormat)),
+        "srt" => Some(Box::new(SrtFormat)),
+        "json" => Some(Box::new(JsonFormat)),
+        _ => None,
+    }
+}
+
+/// Generate output file path
+/// stem: input filename (without extension)
+/// format: format name (txt/srt/json)
+/// output_dir: output directory
+pub fn output_file_path(stem: &str, format: &str, output_dir: &std::path::Path) -> std::path::PathBuf {
+    let filename = format!("{}.transcript.{}", stem, format);
+    output_dir.join(filename)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_transcript() -> Transcript {
+        Transcript {
+            file: "test.mp4".to_string(),
+            model: "base".to_string(),
+            language: "zh".to_string(),
+            duration: 10.0,
+            segments: vec![
+                Segment {
+                    start: 0.0,
+                    end: 3.5,
+                    text: "This is the first segment of recognized text.".to_string(),
+                    words: vec![],
+                },
+                Segment {
+                    start: 3.5,
+                    end: 7.2,
+                    text: "This is the second segment of recognized text.".to_string(),
+                    words: vec![],
+                },
+            ],
+            transcribed_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn test_txt_format() {
+        let transcript = sample_transcript();
+        let formatter = TxtFormat;
+        let output = formatter.write(&transcript).unwrap();
+        assert_eq!(output, "This is the first segment of recognized text.\nThis is the second segment of recognized text.\n");
+    }
+
+    #[test]
+    fn test_srt_format() {
+        let transcript = sample_transcript();
+        let formatter = SrtFormat;
+        let output = formatter.write(&transcript).unwrap();
+        assert!(output.contains("00:00:00,000 --> 00:00:03,500"));
+        assert!(output.contains("00:00:03,500 --> 00:00:07,200"));
+        assert!(output.contains("1\n"));
+        assert!(output.contains("2\n"));
+    }
+
+    #[test]
+    fn test_json_format() {
+        let transcript = sample_transcript();
+        let formatter = JsonFormat;
+        let output = formatter.write(&transcript).unwrap();
+        assert!(output.contains("\"file\": \"test.mp4\""));
+        assert!(output.contains("\"language\": \"zh\""));
+    }
+
+    #[test]
+    fn test_format_timestamp_srt() {
+        assert_eq!(format_timestamp_srt(0.0), "00:00:00,000");
+        assert_eq!(format_timestamp_srt(3.5), "00:00:03,500");
+        assert_eq!(format_timestamp_srt(125.0), "00:02:05,000");
+        assert_eq!(format_timestamp_srt(3600.0), "01:00:00,000");
+    }
+
+    #[test]
+    fn test_output_file_path() {
+        let path = output_file_path("video", "srt", std::path::Path::new("/out"));
+        assert_eq!(path, std::path::PathBuf::from("/out/video.transcript.srt"));
+    }
+
+    #[test]
+    fn test_get_format_writer() {
+        assert!(get_format_writer("txt").is_some());
+        assert!(get_format_writer("srt").is_some());
+        assert!(get_format_writer("json").is_some());
+        assert!(get_format_writer("invalid").is_none());
+    }
+}
