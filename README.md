@@ -21,6 +21,15 @@ A fast video transcription CLI tool powered by whisper.cpp. Extracts audio from 
   - Ubuntu: `sudo apt install ffmpeg`
   - Windows: Download from https://ffmpeg.org/
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap RedAtman/tap
+brew install transcriber
+```
+
+> Taps into [RedAtman/homebrew-tap](https://github.com/RedAtman/homebrew-tap). Formula is automatically updated on each release.
+
 ### From Source
 
 ```bash
