@@ -18,7 +18,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: cargo fmt --all -- --check
+      - name: Check formatting
+        run: |
+          cargo fmt --all
+          if ! git diff --quiet; then
+            echo "Formatting issues found. Run 'cargo fmt --all' locally."
+            git diff
+            exit 1
+          fi
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
@@ -37,7 +44,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libopus-dev libasound2-dev libsamplerate0-dev pkg-config libssl-dev cmake build-essential
       - name: Install deps (macOS)
         if: matrix.os == 'macos-latest'
-        run: brew install cmake pkg-config opus libsndfile samplerate
+        run: brew install cmake pkg-config opus libsndfile libsamplerate
       - name: Install deps (Windows)
         if: matrix.os == 'windows-latest'
         run: choco install cmake pkgconfiglite
