@@ -13,28 +13,9 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   build:
     name: Build ${{ matrix.target.name }}
     runs-on: ${{ matrix.target.runner }}
-    needs: create-release
-    permissions:
-      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -73,8 +54,10 @@ jobs:
             cp target/release/transcriber dist/${{ matrix.target.artifact }}
           fi
       - name: Upload artifact
-        uses: actions/upload-release-asset@v2
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./dist/${{ matrix.target.artifact }}
-          asset_name: ${{ matrix.target.artifact }}
+          files: ./dist/${{ matrix.target.artifact }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
