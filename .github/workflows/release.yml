@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -30,6 +33,8 @@ jobs:
     name: Build ${{ matrix.target.name }}
     runs-on: ${{ matrix.target.runner }}
     needs: create-release
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -55,7 +60,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libopus-dev libasound2-dev libsamplerate0-dev pkg-config libssl-dev cmake build-essential
       - name: Install deps (macOS)
         if: matrix.target.runner == 'macos-latest'
-        run: brew install cmake pkg-config opus libsndfile samplerate
+        run: brew install cmake pkg-config opus libsndfile libsamplerate
       - name: Build
         run: cargo build --release
       - name: Prepare artifact
