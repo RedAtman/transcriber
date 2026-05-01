@@ -68,7 +68,13 @@ impl FormatWriter for SrtFormat {
         for (i, segment) in transcript.segments.iter().enumerate() {
             let start = format_timestamp_srt(segment.start);
             let end = format_timestamp_srt(segment.end);
-            output.push_str(&format!("{}\n{} --> {}\n{}\n\n", i + 1, start, end, segment.text));
+            output.push_str(&format!(
+                "{}\n{} --> {}\n{}\n\n",
+                i + 1,
+                start,
+                end,
+                segment.text
+            ));
         }
         Ok(output)
     }
@@ -114,7 +120,11 @@ pub fn get_format_writer(format: &str) -> Option<Box<dyn FormatWriter>> {
 /// stem: input filename (without extension)
 /// format: format name (txt/srt/json)
 /// output_dir: output directory
-pub fn output_file_path(stem: &str, format: &str, output_dir: &std::path::Path) -> std::path::PathBuf {
+pub fn output_file_path(
+    stem: &str,
+    format: &str,
+    output_dir: &std::path::Path,
+) -> std::path::PathBuf {
     let filename = format!("{}.transcript.{}", stem, format);
     output_dir.join(filename)
 }
