@@ -1,19 +1,18 @@
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use tracing_subscriber::EnvFilter;
+use transcriber::audio::AudioExtractor;
 use transcriber::cli::{Cli, Commands};
-use transcriber::config::{Config, CliOverrides};
+use transcriber::config::{CliOverrides, Config};
 use transcriber::error::{AppError, Result};
 use transcriber::model::ModelManager;
-use transcriber::audio::AudioExtractor;
 use transcriber::transcription::Transcriber;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
@@ -33,11 +32,10 @@ async fn main() {
 fn handle_init(custom_path: Option<&str>) -> Result<()> {
     let config_path = match custom_path {
         Some(path) => PathBuf::from(path),
-        None => Config::default_config_path()
-            .ok_or_else(|| AppError::Config {
-                message: "Cannot determine config directory. Use --path to specify.".to_string(),
-                field: None,
-            })?,
+        None => Config::default_config_path().ok_or_else(|| AppError::Config {
+            message: "Cannot determine config directory. Use --path to specify.".to_string(),
+            field: None,
+        })?,
     };
 
     if config_path.exists() {
@@ -80,7 +78,9 @@ async fn handle_transcribe(cli: &Cli) -> Result<()> {
         }
 
         println!("Transcribing: {}", input);
-        let transcript = transcriber.transcribe_file(video_path, &model_mgr, None).await?;
+        let transcript = transcriber
+            .transcribe_file(video_path, &model_mgr, None)
+            .await?;
         transcriber.write_output(&transcript, video_path)?;
 
         println!(
@@ -98,7 +98,9 @@ async fn handle_transcribe(cli: &Cli) -> Result<()> {
         }
 
         println!("Batch transcribing: {}", dir);
-        let stats = transcriber.transcribe_directory(dir_path, &model_mgr).await?;
+        let stats = transcriber
+            .transcribe_directory(dir_path, &model_mgr)
+            .await?;
         println!(
             "Batch complete: {}/{} success, {} failed, {} skipped ({:.1}s audio)",
             stats.success, stats.total, stats.failed, stats.skipped, stats.total_duration_secs
@@ -115,8 +117,7 @@ fn load_config(cli: &Cli) -> Result<Config> {
     let config_path = if let Some(ref path) = cli.config {
         PathBuf::from(path)
     } else {
-        Config::default_config_path()
-            .unwrap_or_else(|| Path::new("config.yaml").to_path_buf())
+        Config::default_config_path().unwrap_or_else(|| Path::new("config.yaml").to_path_buf())
     };
 
     let mut config = if config_path.exists() {
@@ -141,8 +142,7 @@ fn resolve_cache_dir(config: &Config) -> PathBuf {
         }
     }
     if dir.is_empty() {
-        Config::default_cache_dir()
-            .unwrap_or_else(|| Path::new("~/.cache/whisper").to_path_buf())
+        Config::default_cache_dir().unwrap_or_else(|| Path::new("~/.cache/whisper").to_path_buf())
     } else {
         PathBuf::from(&dir)
     }

@@ -92,7 +92,7 @@ pub struct CacheConfig {
     pub directory: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub model: ModelConfig,
@@ -101,19 +101,6 @@ pub struct Config {
     pub output: OutputConfig,
     pub logging: LoggingConfig,
     pub cache: CacheConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            model: ModelConfig::default(),
-            audio: AudioConfig::default(),
-            performance: PerformanceConfig::default(),
-            output: OutputConfig::default(),
-            logging: LoggingConfig::default(),
-            cache: CacheConfig::default(),
-        }
-    }
 }
 
 impl Default for CacheConfig {
@@ -140,11 +127,7 @@ impl Config {
 
     /// Default cache directory: ~/.cache/whisper
     pub fn default_cache_dir() -> Option<PathBuf> {
-        std::env::var_os("HOME").map(|home| {
-            PathBuf::from(home)
-                .join(".cache")
-                .join("whisper")
-        })
+        std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache").join("whisper"))
     }
 
     /// Load config from file, returns defaults if file doesn't exist
@@ -152,11 +135,10 @@ impl Config {
         if !path.exists() {
             return Ok(Config::default());
         }
-        let contents = std::fs::read_to_string(path)
-            .map_err(|e| AppError::Config {
-                message: format!("Cannot read config file {:?}: {}", path, e),
-                field: Some("file".to_string()),
-            })?;
+        let contents = std::fs::read_to_string(path).map_err(|e| AppError::Config {
+            message: format!("Cannot read config file {:?}: {}", path, e),
+            field: Some("file".to_string()),
+        })?;
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)
     }
@@ -214,9 +196,7 @@ impl Config {
     }
 }
 
-pub static VALID_MODELS: &[&str] = &[
-    "tiny", "base", "small", "medium", "large-v3-turbo",
-];
+pub static VALID_MODELS: &[&str] = &["tiny", "base", "small", "medium", "large-v3-turbo"];
 
 pub static VALID_QUANTIZATIONS: &[&str] = &["q4_k", "q5_k", "q6_k", "q8_0"];
 

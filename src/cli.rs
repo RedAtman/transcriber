@@ -46,18 +46,11 @@ pub struct Cli {
     pub language: Option<String>,
 
     /// Output directory
-    #[arg(
-        short = 'o',
-        long = "output",
-        value_name = "DIR"
-    )]
+    #[arg(short = 'o', long = "output", value_name = "DIR")]
     pub output: Option<String>,
 
     /// Custom config file path
-    #[arg(
-        long = "config",
-        value_name = "FILE"
-    )]
+    #[arg(long = "config", value_name = "FILE")]
     pub config: Option<String>,
 
     /// Skip existing transcript files

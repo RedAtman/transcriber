@@ -11,11 +11,36 @@ pub struct ModelInfo {
 
 /// List of supported models
 pub static MODELS: &[ModelInfo] = &[
-    ModelInfo { name: "tiny", description: "Fastest, lowest quality", f16_size_mb: 75, ggml_filename: "ggml-tiny.bin" },
-    ModelInfo { name: "base", description: "Default, balanced", f16_size_mb: 148, ggml_filename: "ggml-base.bin" },
-    ModelInfo { name: "small", description: "Better quality", f16_size_mb: 488, ggml_filename: "ggml-small.bin" },
-    ModelInfo { name: "medium", description: "High quality", f16_size_mb: 1500, ggml_filename: "ggml-medium.bin" },
-    ModelInfo { name: "large-v3-turbo", description: "Best quality/speed ratio", f16_size_mb: 800, ggml_filename: "ggml-large-v3-turbo.bin" },
+    ModelInfo {
+        name: "tiny",
+        description: "Fastest, lowest quality",
+        f16_size_mb: 75,
+        ggml_filename: "ggml-tiny.bin",
+    },
+    ModelInfo {
+        name: "base",
+        description: "Default, balanced",
+        f16_size_mb: 148,
+        ggml_filename: "ggml-base.bin",
+    },
+    ModelInfo {
+        name: "small",
+        description: "Better quality",
+        f16_size_mb: 488,
+        ggml_filename: "ggml-small.bin",
+    },
+    ModelInfo {
+        name: "medium",
+        description: "High quality",
+        f16_size_mb: 1500,
+        ggml_filename: "ggml-medium.bin",
+    },
+    ModelInfo {
+        name: "large-v3-turbo",
+        description: "Best quality/speed ratio",
+        f16_size_mb: 800,
+        ggml_filename: "ggml-large-v3-turbo.bin",
+    },
 ];
 
 /// Model manager
@@ -36,7 +61,8 @@ impl ModelManager {
 
     /// Get quantized model path
     pub fn quantized_model_path(&self, model_name: &str, quantization: &str) -> PathBuf {
-        self.cache_dir.join(format!("ggml-{}-{}.bin", model_name, quantization))
+        self.cache_dir
+            .join(format!("ggml-{}-{}.bin", model_name, quantization))
     }
 
     /// Check if model is cached
@@ -135,8 +161,8 @@ impl ModelManager {
 use whisper_rs::{WhisperContext, WhisperContextParameters};
 
 impl ModelManager {
-/// Load model, returning WhisperContext
-/// Automatically handles download (if not cached) and GPU backend selection
+    /// Load model, returning WhisperContext
+    /// Automatically handles download (if not cached) and GPU backend selection
     pub async fn load(
         &self,
         model_name: &str,
@@ -175,14 +201,12 @@ impl ModelManager {
             }
         }
 
-        let ctx = WhisperContext::new_with_params(
-            model_path.to_string_lossy().as_ref(),
-            ctx_params,
-        )
-        .map_err(|e| AppError::Model {
-            message: format!("Failed to load model: {}", e),
-            model: model_name.to_string(),
-        })?;
+        let ctx =
+            WhisperContext::new_with_params(model_path.to_string_lossy().as_ref(), ctx_params)
+                .map_err(|e| AppError::Model {
+                    message: format!("Failed to load model: {}", e),
+                    model: model_name.to_string(),
+                })?;
 
         Ok(ctx)
     }
@@ -201,10 +225,10 @@ impl ModelManager {
 
         let metadata = std::fs::metadata(&path)?;
         let min_size: u64 = match model_name {
-            "tiny" => 50 * 1024 * 1024,     // 50MB
-            "base" => 100 * 1024 * 1024,    // 100MB
-            "small" => 300 * 1024 * 1024,   // 300MB
-            "medium" => 1000 * 1024 * 1024, // 1GB
+            "tiny" => 50 * 1024 * 1024,            // 50MB
+            "base" => 100 * 1024 * 1024,           // 100MB
+            "small" => 300 * 1024 * 1024,          // 300MB
+            "medium" => 1000 * 1024 * 1024,        // 1GB
             "large-v3-turbo" => 500 * 1024 * 1024, // 500MB
             _ => 10 * 1024 * 1024,
         };

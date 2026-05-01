@@ -46,8 +46,8 @@ impl AudioExtractor {
 use tokio::process::Command as TokioCommand;
 
 impl AudioExtractor {
-/// Extract audio to WAV file and return the path
-/// Output: 16kHz mono PCM WAV
+    /// Extract audio to WAV file and return the path
+    /// Output: 16kHz mono PCM WAV
     pub async fn extract(&self, video_path: &Path, output_path: &Path) -> Result<()> {
         let status = TokioCommand::new(&self.ffmpeg.path)
             .arg("-i")

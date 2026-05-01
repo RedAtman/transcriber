@@ -1,20 +1,19 @@
-use crate::audio::{AudioExtractor, file_stem, is_supported_video};
+use crate::audio::{file_stem, is_supported_video, AudioExtractor};
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::model::ModelManager;
-use crate::output::{self, Transcript, Segment, Word};
-use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
+use crate::output::{self, Segment, Transcript, Word};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// Read PCM f32 samples from WAV file
 fn load_wav_as_f32(path: &Path) -> Result<Vec<f32>> {
-    let mut reader = hound::WavReader::open(path)
-        .map_err(|e| AppError::Audio {
-            message: format!("Failed to read WAV file: {}", e),
-            source: None,
-        })?;
+    let mut reader = hound::WavReader::open(path).map_err(|e| AppError::Audio {
+        message: format!("Failed to read WAV file: {}", e),
+        source: None,
+    })?;
 
     let spec = reader.spec();
     if spec.sample_rate != 16000 {
@@ -25,23 +24,18 @@ fn load_wav_as_f32(path: &Path) -> Result<Vec<f32>> {
     }
 
     let samples: Vec<f32> = match spec.sample_format {
-        hound::SampleFormat::Int => {
-            reader.samples::<i16>()
-                .map(|s| s.unwrap_or(0) as f32 / 32768.0)
-                .collect()
-        }
-        hound::SampleFormat::Float => {
-            reader.samples::<f32>()
-                .map(|s| s.unwrap_or(0.0))
-                .collect()
-        }
+        hound::SampleFormat::Int => reader
+            .samples::<i16>()
+            .map(|s| s.unwrap_or(0) as f32 / 32768.0)
+            .collect(),
+        hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap_or(0.0)).collect(),
     };
 
     Ok(samples)
 }
 
-use whisper_rs::{WhisperContext, FullParams, SamplingStrategy};
 use chrono::Utc;
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
 /// Core transcriber
 pub struct Transcriber {
@@ -65,12 +59,14 @@ impl Transcriber {
         if let Some(pb) = pb {
             pb.set_message("Loading model...");
         }
-        let ctx = model_mgr.load(
-            &self.config.model.name,
-            self.config.model.quantization.as_deref(),
-            &self.config.performance.gpu,
-            self.config.performance.threads,
-        ).await?;
+        let ctx = model_mgr
+            .load(
+                &self.config.model.name,
+                self.config.model.quantization.as_deref(),
+                &self.config.performance.gpu,
+                self.config.performance.threads,
+            )
+            .await?;
 
         if let Some(pb) = pb {
             pb.set_message("Extracting audio...");
@@ -86,13 +82,8 @@ impl Transcriber {
         let audio_samples = load_wav_as_f32(&audio_path)?;
 
         // 4. Run transcription
-        let transcript = transcribe_with_whisper(
-            &ctx,
-            &audio_samples,
-            &video_path,
-            &self.config,
-            pb,
-        )?;
+        let transcript =
+            transcribe_with_whisper(&ctx, &audio_samples, &video_path, &self.config, pb)?;
 
         // 5. Cleanup temp files (TempDir drops automatically)
         drop(temp_dir);
@@ -130,7 +121,8 @@ fn transcribe_with_whisper(
         segment: None,
     })?;
 
-    state.full(params, audio_samples)
+    state
+        .full(params, audio_samples)
         .map_err(|e| AppError::Transcription {
             message: format!("Whisper inference failed: {}", e),
             segment: None,
@@ -156,16 +148,20 @@ fn transcribe_with_whisper(
 
     let mut segments = Vec::with_capacity(n_segments as usize);
     for i in 0..n_segments {
-        let segment = state.get_segment(i).ok_or_else(|| AppError::Transcription {
-            message: format!("Failed to get segment {}", i),
-            segment: Some(i as usize),
-        })?;
+        let segment = state
+            .get_segment(i)
+            .ok_or_else(|| AppError::Transcription {
+                message: format!("Failed to get segment {}", i),
+                segment: Some(i as usize),
+            })?;
 
-        let text = segment.to_str()
+        let text = segment
+            .to_str()
             .map_err(|e| AppError::Transcription {
                 message: format!("Failed to get segment text: {}", e),
                 segment: Some(i as usize),
-            })?.to_string();
+            })?
+            .to_string();
         let t0 = segment.start_timestamp() as f64 / 100.0;
         let t1 = segment.end_timestamp() as f64 / 100.0;
 
@@ -173,9 +169,7 @@ fn transcribe_with_whisper(
         let mut words = Vec::new();
         for j in 0..n_tokens {
             if let Some(token) = segment.get_token(j) {
-                let token_text = token.to_str()
-                    .unwrap_or_default()
-                    .to_string();
+                let token_text = token.to_str().unwrap_or_default().to_string();
                 let token_data = token.token_data();
                 words.push(Word {
                     word: token_text,
@@ -224,7 +218,11 @@ pub struct BatchStats {
 
 impl Transcriber {
     /// Transcribe all video files in a directory
-    pub async fn transcribe_directory(&self, dir_path: &Path, model_mgr: &ModelManager) -> Result<BatchStats> {
+    pub async fn transcribe_directory(
+        &self,
+        dir_path: &Path,
+        model_mgr: &ModelManager,
+    ) -> Result<BatchStats> {
         // Collect all video files
         let mut video_files = Vec::new();
         collect_video_files(dir_path, &mut video_files)?;
@@ -244,7 +242,9 @@ impl Transcriber {
         let overall_pb = mp.add(ProgressBar::new(total as u64));
         overall_pb.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] [{bar:40.green/white}] {pos}/{len} files ({percent}%)")
+                .template(
+                    "[{elapsed_precise}] [{bar:40.green/white}] {pos}/{len} files ({percent}%)",
+                )
                 .unwrap()
                 .progress_chars("=>-"),
         );
@@ -253,7 +253,7 @@ impl Transcriber {
         for video in &video_files {
             let stem = file_stem(video);
 
-// Check if should skip
+            // Check if should skip
             if self.should_skip(video) {
                 stats.skipped += 1;
                 overall_pb.inc(1);
@@ -341,7 +341,12 @@ impl Transcriber {
         let formats: Vec<&str> = if self.config.output.formats.iter().any(|f| f == "all") {
             vec!["txt", "srt", "json"]
         } else {
-            self.config.output.formats.iter().map(|s| s.as_str()).collect()
+            self.config
+                .output
+                .formats
+                .iter()
+                .map(|s| s.as_str())
+                .collect()
         };
 
         for fmt in formats {
