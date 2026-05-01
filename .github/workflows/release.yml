@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.TAP_REPO }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       - name: Download release artifacts
         run: |
           for asset in transcriber-macos-aarch64 transcriber-macos-x86_64 transcriber-linux-x86_64; do
