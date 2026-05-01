@@ -70,27 +70,24 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ env.TAP_REPO }}
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       - name: Download release artifacts
         run: |
+          mkdir -p artifacts
           for asset in transcriber-macos-aarch64 transcriber-macos-x86_64 transcriber-linux-x86_64; do
             echo "Downloading $asset..."
             gh release download "$GH_TAG" \
               --repo "$GH_REPO" \
               --pattern "$asset" \
-              --dir .
+              --dir artifacts
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Compute SHA256 and write formula
+      - name: Generate formula
         run: |
-          SHA256_MACOS_ARM64=$(sha256sum transcriber-macos-aarch64 | cut -d' ' -f1)
-          SHA256_MACOS_X86_64=$(sha256sum transcriber-macos-x86_64 | cut -d' ' -f1)
-          SHA256_LINUX_X86_64=$(sha256sum transcriber-linux-x86_64 | cut -d' ' -f1)
-          cat > Formula/transcriber.rb << EOF
+          SHA256_MACOS_ARM64=$(sha256sum artifacts/transcriber-macos-aarch64 | cut -d' ' -f1)
+          SHA256_MACOS_X86_64=$(sha256sum artifacts/transcriber-macos-x86_64 | cut -d' ' -f1)
+          SHA256_LINUX_X86_64=$(sha256sum artifacts/transcriber-linux-x86_64 | cut -d' ' -f1)
+          cat > formula.rb << FORMULA
           class Transcriber < Formula
             desc "Fast video transcription CLI powered by whisper.cpp"
             homepage "https://github.com/$GH_REPO"
@@ -130,16 +127,25 @@ jobs:
               system "#{bin}/transcriber", "--help"
             end
           end
-          EOF
-          rm -f transcriber-macos-aarch64 transcriber-macos-x86_64 transcriber-linux-x86_64
-      - name: Commit and push
+          FORMULA
+          CONTENT=$(base64 -w0 formula.rb)
+          echo "FORMULA_CONTENT=$CONTENT" >> $GITHUB_ENV
+      - name: Get current file SHA
+        id: get_sha
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/transcriber.rb
-          if git diff --cached --quiet; then
-            echo "Formula unchanged, skipping commit"
-          else
-            git commit -m "chore: update transcriber formula for $GH_TAG"
-            git push
-          fi
+          SHA=$(gh api repos/$TAP_REPO/contents/Formula/transcriber.rb \
+            --jq '.sha' 2>/dev/null || echo "")
+          echo "CURRENT_SHA=$SHA" >> $GITHUB_ENV
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Push formula to tap repo
+        run: |
+          jq -n \
+            --arg msg "chore: update transcriber formula for $GH_TAG" \
+            --arg content "$FORMULA_CONTENT" \
+            --arg sha "$CURRENT_SHA" \
+            '{message: $msg, content: $content, sha: $sha}' > payload.json
+          gh api -X PUT repos/$TAP_REPO/contents/Formula/transcriber.rb \
+            --input payload.json
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
