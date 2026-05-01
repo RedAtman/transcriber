@@ -11,6 +11,9 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  GH_REPO: ${{ github.repository }}
+  GH_TAG: ${{ github.ref_name }}  
+  TAP_REPO: RedAtman/homebrew-tap
 
 jobs:
   build:
@@ -56,8 +59,87 @@ jobs:
       - name: Upload artifact
         uses: softprops/action-gh-release@v2
         with:
-          files: ./dist/${{ matrix.target.artifact }}
+          files: dist/${{ matrix.target.artifact }}
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    name: Update Homebrew tap formula
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPO }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download release artifacts
+        run: |
+          for asset in transcriber-macos-aarch64 transcriber-macos-x86_64 transcriber-linux-x86_64; do
+            echo "Downloading $asset..."
+            gh release download "$GH_TAG" \
+              --repo "$GH_REPO" \
+              --pattern "$asset" \
+              --dir .
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute SHA256 and write formula
+        run: |
+          SHA256_MACOS_ARM64=$(sha256sum transcriber-macos-aarch64 | cut -d' ' -f1)
+          SHA256_MACOS_X86_64=$(sha256sum transcriber-macos-x86_64 | cut -d' ' -f1)
+          SHA256_LINUX_X86_64=$(sha256sum transcriber-linux-x86_64 | cut -d' ' -f1)
+          cat > Formula/transcriber.rb << EOF
+          class Transcriber < Formula
+            desc "Fast video transcription CLI powered by whisper.cpp"
+            homepage "https://github.com/$GH_REPO"
+            license "MIT"
+
+            depends_on "ffmpeg"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/$GH_REPO/releases/download/$GH_TAG/transcriber-macos-aarch64"
+                sha256 "$SHA256_MACOS_ARM64"
+
+                def install
+                  bin.install "transcriber-macos-aarch64" => "transcriber"
+                end
+              end
+              on_intel do
+                url "https://github.com/$GH_REPO/releases/download/$GH_TAG/transcriber-macos-x86_64"
+                sha256 "$SHA256_MACOS_X86_64"
+
+                def install
+                  bin.install "transcriber-macos-x86_64" => "transcriber"
+                end
+              end
+            end
+
+            on_linux do
+              url "https://github.com/$GH_REPO/releases/download/$GH_TAG/transcriber-linux-x86_64"
+              sha256 "$SHA256_LINUX_X86_64"
+
+              def install
+                bin.install "transcriber-linux-x86_64" => "transcriber"
+              end
+            end
+
+            test do
+              system "#{bin}/transcriber", "--help"
+            end
+          end
+          EOF
+          rm -f transcriber-macos-aarch64 transcriber-macos-x86_64 transcriber-linux-x86_64
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/transcriber.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged, skipping commit"
+          else
+            git commit -m "chore: update transcriber formula for $GH_TAG"
+            git push
+          fi
