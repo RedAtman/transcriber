@@ -12,4 +12,5 @@ fn main() {
         .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION").unwrap_or_default());
 
     println!("cargo:rustc-env=TRANSCRIBER_VERSION={version}");
+    println!("cargo:rerun-if-changed=.git/HEAD");
 }
