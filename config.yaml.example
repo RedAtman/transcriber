@@ -1,0 +1,58 @@
+# Transcriber Configuration File
+# This file contains all default configuration values.
+# Uncomment and modify any values as needed.
+
+model:
+  # Model name: tiny/base/small/medium/large-v3-turbo
+  name: base
+  # Language code (ISO 639-1, e.g. zh/en/ja) or "auto" for auto-detection
+  language: auto
+  # Quantization: q4_k/q5_k/q6_k/q8_0 (optional, leave empty for F16)
+  # quantization: q5_k
+
+audio:
+  # Sample rate for Whisper (fixed at 16kHz)
+  sample_rate: 16000
+  # Audio channels (fixed at mono)
+  channels: 1
+
+performance:
+  # Number of CPU threads (0 = auto detect)
+  threads: 0
+  # GPU backend: auto/metal/cuda/vulkan/cpu
+  gpu: auto
+
+output:
+  # Output formats: txt/srt/json/all (comma separated)
+  formats:
+    - txt
+  # Output directory (empty = same as input file)
+  directory: ""
+  # Skip files that already have transcript output
+  skip_existing: true
+
+logging:
+  # Log level: trace/debug/info/warn
+  level: info
+  # Log file path (empty = no file logging)
+  file: ""
+  # Colored terminal output
+  colors: true
+
+cache:
+  # Model cache directory
+  directory: ~/.cache/whisper
+
+inference:
+  # Initial prompt for decoder context (optional)
+  initial_prompt: ""
+  # Sampling temperature (0.0 = deterministic, 1.0 = more random)
+  temperature: 0.0
+  # Suppress non-speech tokens
+  suppress_non_speech: false
+  # No-speech detection threshold (0.0-1.0)
+  no_speech_threshold: 0.6
+  # Maximum segment length in characters (0 = no limit)
+  max_segment_length: 0
+  # Split timestamps on word boundaries
+  split_on_word: false

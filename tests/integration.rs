@@ -108,3 +108,147 @@ fn test_config_write_default_and_reload() -> Result<(), Box<dyn std::error::Erro
 
     Ok(())
 }
+
+#[test]
+fn test_config_validation_temperature_out_of_range() {
+    let mut config = transcriber::config::Config::default();
+    config.inference.temperature = 1.5;
+
+    let errors = config.validate();
+    assert!(errors.iter().any(|e| e.contains("temperature")));
+}
+
+#[test]
+fn test_config_validation_invalid_quantization() {
+    let mut config = transcriber::config::Config::default();
+    config.model.quantization = Some("invalid_quant".to_string());
+
+    let errors = config.validate();
+    assert!(errors.iter().any(|e| e.contains("Invalid quantization")));
+}
+
+fn test_output_formatter_unknown_format() {
+    use transcriber::output::get_format_writer;
+
+    assert!(get_format_writer("txt").is_some());
+    assert!(get_format_writer("srt").is_some());
+    assert!(get_format_writer("json").is_some());
+    assert!(get_format_writer("unknown").is_none());
+    assert!(get_format_writer("").is_none());
+}
+
+#[test]
+fn test_output_file_path_generation() {
+    use transcriber::output::output_file_path;
+
+    let path = output_file_path("my_video", "srt", std::path::Path::new("/output"));
+    assert_eq!(path, std::path::PathBuf::from("/output/my_video.transcript.srt"));
+
+    let path = output_file_path("video", "json", std::path::Path::new("./"));
+    assert!(path.to_str().unwrap().contains("video.transcript.json"));
+}
+
+// ============================================================================
+// Integration Tests (10.3)
+// ============================================================================
+
+#[test]
+fn test_audio_extractor_creation() {
+    let extractor = transcriber::audio::AudioExtractor::new();
+    assert!(extractor.is_ok());
+
+    let extractor = extractor.unwrap();
+    let info = extractor.ffmpeg_info();
+    assert!(info.version.contains("ffmpeg") || info.version == "unknown");
+}
+
+#[test]
+fn test_audio_extraction_integration() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write;
+    use tokio::runtime::Runtime;
+
+    let dir = tempfile::tempdir()?;
+    let input_path = dir.path().join("test_input.wav");
+    let output_path = dir.path().join("test_output.wav");
+
+    let ffmpeg = which::which("ffmpeg").expect("FFmpeg not found");
+    let output = std::process::Command::new(&ffmpeg)
+        .args([
+            "-f", "lavfi",
+            "-i", "anullsrc=r=16000:cl=mono",
+            "-t", "1",
+            "-y",
+        ])
+        .arg(&input_path)
+        .output()?;
+
+    if !output.status.success() {
+        return Err(format!("FFmpeg failed to create test audio: {:?}", String::from_utf8_lossy(&output.stderr)).into());
+    }
+
+    let rt = Runtime::new()?;
+    rt.block_on(async {
+        let extractor = transcriber::audio::AudioExtractor::new()?;
+        extractor.extract(&input_path, &output_path).await
+    })?;
+
+    assert!(output_path.exists());
+    let metadata = std::fs::metadata(&output_path)?;
+    assert!(metadata.len() > 0);
+
+    Ok(())
+}
+
+#[test]
+fn test_supported_video_extensions() {
+    use transcriber::audio::{is_supported_video, SUPPORTED_VIDEO_EXTENSIONS};
+
+    assert!(SUPPORTED_VIDEO_EXTENSIONS.contains(&"mp4"));
+    assert!(SUPPORTED_VIDEO_EXTENSIONS.contains(&"mov"));
+    assert!(SUPPORTED_VIDEO_EXTENSIONS.contains(&"avi"));
+
+    assert!(is_supported_video(std::path::Path::new("video.mp4")));
+    assert!(is_supported_video(std::path::Path::new("video.MP4")));
+    assert!(is_supported_video(std::path::Path::new("/path/to/video.mov")));
+    assert!(!is_supported_video(std::path::Path::new("document.pdf")));
+    assert!(!is_supported_video(std::path::Path::new("audio.mp3")));
+}
+
+#[test]
+fn test_cli_overrides_merge() {
+    use transcriber::config::{Config, CliOverrides};
+
+    let mut config = Config::default();
+    assert_eq!(config.model.name, "base");
+
+    let overrides = CliOverrides {
+        model: Some("medium".to_string()),
+        language: Some("zh".to_string()),
+        threads: Some(8),
+        ..Default::default()
+    };
+
+    config.merge_with_cli(overrides);
+
+    assert_eq!(config.model.name, "medium");
+    assert_eq!(config.model.language, "zh");
+    assert_eq!(config.performance.threads, 8);
+    assert_eq!(config.performance.gpu, "auto");
+}
+
+#[test]
+fn test_error_type_display() {
+    use transcriber::error::AppError;
+
+    let err = AppError::FfmpegNotFound;
+    let display = format!("{}", err);
+    assert!(display.contains("FFmpeg not found"));
+
+    let err = AppError::Config {
+        message: "test error".to_string(),
+        field: Some("model".to_string()),
+    };
+    let display = format!("{}", err);
+    assert!(display.contains("test error"));
+    assert!(display.contains("model"));
+}
