@@ -45,12 +45,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install deps (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libopus-dev libasound2-dev libsamplerate0-dev pkg-config libssl-dev cmake build-essential
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev libasound2-dev libsamplerate0-dev pkg-config libssl-dev cmake build-essential ffmpeg
       - name: Install deps (macOS)
         if: matrix.os == 'macos-latest'
-        run: brew install cmake pkg-config opus libsndfile libsamplerate
+        run: brew install cmake pkg-config opus libsndfile libsamplerate ffmpeg
       - name: Install deps (Windows)
         if: matrix.os == 'windows-latest'
-        run: choco install cmake pkgconfiglite
+        run: choco install cmake pkgconfiglite ffmpeg
       - run: cargo build --verbose
       - run: cargo test --verbose
