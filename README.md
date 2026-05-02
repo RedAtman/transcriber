@@ -68,6 +68,29 @@ transcriber -d ./videos --skip-existing
 transcriber -d ./videos --format "txt,srt,json"
 ```
 
+### Inference Parameters
+
+```bash
+# Initial prompt for decoder context
+transcriber -i video.mp4 --initial-prompt "technical terms"
+
+# Sampling temperature (0.0 = deterministic, 1.0 = more random)
+transcriber -i video.mp4 --temperature 0.2
+
+# Suppress non-speech tokens
+transcriber -i video.mp4 --suppress-non-speech
+
+# No-speech detection threshold
+transcriber -i video.mp4 --no-speech-threshold 0.5
+
+# Split on word boundaries
+transcriber -i video.mp4 --split-on-word
+
+# Combined example
+transcriber -i video.mp4 -m medium -l en --initial-prompt "technology" --temperature 0.3
+transcriber -i video.mp4 -m medium -l zh --initial-prompt "科技" --temperature 0.3
+```
+
 ### Configuration
 
 ```bash

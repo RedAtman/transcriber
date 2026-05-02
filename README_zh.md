@@ -59,6 +59,28 @@ transcriber -d ./videos --skip-existing
 transcriber -d ./videos --format "txt,srt,json"
 ```
 
+### 推理参数
+
+```bash
+# 解码器初始提示词
+transcriber -i video.mp4 --initial-prompt "技术术语"
+
+# 采样温度 (0.0 = 确定性强, 1.0 = 更随机)
+transcriber -i video.mp4 --temperature 0.2
+
+# 抑制非语音标记
+transcriber -i video.mp4 --suppress-non-speech
+
+# 无语音检测阈值
+transcriber -i video.mp4 --no-speech-threshold 0.5
+
+# 按单词边界分割
+transcriber -i video.mp4 --split-on-word
+
+# 组合使用
+transcriber -i video.mp4 -m medium -l zh --initial-prompt "科技" --temperature 0.3
+```
+
 ### 配置
 
 ```bash
