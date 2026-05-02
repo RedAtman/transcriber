@@ -209,6 +209,11 @@ pub fn append_segment_to_streams(streams: &mut [StreamOutput], segment: &Segment
             }
             _ => unreachable!(),
         }
+        // Flush after each segment so output is visible progressively
+        stream.writer.flush().map_err(|e| crate::error::AppError::Output {
+            message: format!("Failed to flush output file: {}", e),
+            path: None,
+        })?;
         stream.segment_count += 1;
     }
     Ok(())
@@ -310,5 +315,54 @@ mod tests {
         assert!(get_format_writer("srt").is_some());
         assert!(get_format_writer("json").is_some());
         assert!(get_format_writer("invalid").is_none());
+    }
+
+    #[test]
+    fn test_streaming_writes_progressively() {
+        let dir = std::env::temp_dir().join("transcriber-test-streaming");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let formats = vec!["txt".to_string(), "json".to_string()];
+        let mut streams = open_stream_outputs("test", &formats, &dir).unwrap();
+
+        let seg1 = Segment {
+            start: 0.0,
+            end: 2.0,
+            text: "Hello world".to_string(),
+            words: vec![],
+        };
+        append_segment_to_streams(&mut streams, &seg1).unwrap();
+
+        let txt_path = dir.join("test.transcript.txt");
+        let txt_content = std::fs::read_to_string(&txt_path).unwrap();
+        assert_eq!(txt_content, "Hello world\n", "TXT should have first segment after flush");
+
+        let json_path = dir.join("test.transcript.json");
+        let json_content = std::fs::read_to_string(&json_path).unwrap();
+        assert!(json_content.starts_with("["), "JSON should start with array open");
+        assert!(json_content.contains("Hello world"), "JSON should contain first segment");
+
+        let seg2 = Segment {
+            start: 2.0,
+            end: 5.0,
+            text: "Second segment".to_string(),
+            words: vec![],
+        };
+        append_segment_to_streams(&mut streams, &seg2).unwrap();
+
+        let txt_content = std::fs::read_to_string(&txt_path).unwrap();
+        assert_eq!(txt_content, "Hello world\nSecond segment\n", "TXT should have both segments");
+
+        let json_content = std::fs::read_to_string(&json_path).unwrap();
+        assert!(json_content.contains("Second segment"), "JSON should contain second segment");
+
+        finalize_stream_outputs(streams).unwrap();
+
+        let json_content = std::fs::read_to_string(&json_path).unwrap();
+        assert!(json_content.ends_with("\n]\n") || json_content.ends_with("\n]\n"),
+            "JSON should end with array close, got: {:?}", json_content.chars().last());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
