@@ -315,14 +315,11 @@ pub fn write_stream_callback_segment(
 /// Finalize all stream output files (write footers, flush)
 pub fn finalize_stream_outputs(streams: Vec<StreamOutput>) -> Result<()> {
     for mut stream in streams {
-        match stream.format.as_str() {
-            "json" => {
-                writeln!(stream.writer, "\n]").map_err(|e| crate::error::AppError::Output {
-                    message: format!("Failed to write JSON footer: {}", e),
-                    path: None,
-                })?;
-            }
-            _ => {}
+        if stream.format.as_str() == "json" {
+            writeln!(stream.writer, "\n]").map_err(|e| crate::error::AppError::Output {
+                message: format!("Failed to write JSON footer: {}", e),
+                path: None,
+            })?;
         }
         stream
             .writer

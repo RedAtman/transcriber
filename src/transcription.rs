@@ -127,7 +127,7 @@ impl Transcriber {
                 .unwrap_or_else(|_| {
                     tracing::warn!("Streams Arc still referenced after transcription");
                     // Should not happen since params/closure are dropped after full()
-                    return Mutex::new(Vec::new());
+                    Mutex::new(Vec::new())
                 })
                 .into_inner()
                 .unwrap_or_else(|e| {

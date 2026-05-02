@@ -127,6 +127,7 @@ fn test_config_validation_invalid_quantization() {
     assert!(errors.iter().any(|e| e.contains("Invalid quantization")));
 }
 
+#[test]
 fn test_output_formatter_unknown_format() {
     use transcriber::output::get_format_writer;
 
@@ -167,7 +168,6 @@ fn test_audio_extractor_creation() {
 
 #[test]
 fn test_audio_extraction_integration() -> Result<(), Box<dyn std::error::Error>> {
-    use std::io::Write;
     use tokio::runtime::Runtime;
 
     let dir = tempfile::tempdir()?;
