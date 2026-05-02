@@ -116,6 +116,10 @@ pub struct Cli {
     #[arg(long = "split-on-word", help = "Split timestamps on word boundaries")]
     pub split_on_word: bool,
 
+    /// Disable streaming output (write all at once after transcription)
+    #[arg(long = "no-streaming", help = "Disable streaming output, write files after transcription completes")]
+    pub no_streaming: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

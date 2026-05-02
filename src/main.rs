@@ -52,6 +52,7 @@ fn handle_init(custom_path: Option<&str>) -> Result<()> {
 
 async fn handle_transcribe(cli: &Cli) -> Result<()> {
     let config = load_config(cli)?;
+    let streaming = config.output.streaming;
 
     let warnings = config.validate();
     for warning in &warnings {
@@ -81,7 +82,9 @@ async fn handle_transcribe(cli: &Cli) -> Result<()> {
         let transcript = transcriber
             .transcribe_file(video_path, &model_mgr, None)
             .await?;
-        transcriber.write_output(&transcript, video_path)?;
+        if !streaming {
+            transcriber.write_output(&transcript, video_path)?;
+        }
 
         println!(
             "Done! {} segments, {:.1}s audio",

@@ -81,9 +81,42 @@ impl Transcriber {
         }
         let audio_samples = load_wav_as_f32(&audio_path)?;
 
-        // 4. Run transcription
-        let transcript =
-            transcribe_with_whisper(&ctx, &audio_samples, &video_path, &self.config, pb)?;
+        // 4a. Set up streaming output if enabled
+        let stem = file_stem(&video_path);
+        let mut streams = if self.config.output.streaming {
+            let output_dir = if self.config.output.directory == "./" {
+                video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
+            } else {
+                PathBuf::from(&self.config.output.directory)
+            };
+            std::fs::create_dir_all(&output_dir)?;
+
+            // Expand "all" format
+            let formats: Vec<String> = if self.config.output.formats.iter().any(|f| f == "all") {
+                vec!["txt".to_string(), "srt".to_string(), "json".to_string()]
+            } else {
+                self.config.output.formats.clone()
+            };
+
+            Some(output::open_stream_outputs(&stem, &formats, &output_dir)?)
+        } else {
+            None
+        };
+
+        // 4b. Run transcription
+        let transcript = transcribe_with_whisper(
+            &ctx,
+            &audio_samples,
+            &video_path,
+            &self.config,
+            pb,
+            streams.as_mut().map(|v| v.as_mut_slice()),
+        )?;
+
+        // 4c. Finalize streaming output
+        if let Some(s) = streams {
+            output::finalize_stream_outputs(s)?;
+        }
 
         // 5. Cleanup temp files (TempDir drops automatically)
         drop(temp_dir);
@@ -99,6 +132,7 @@ fn transcribe_with_whisper(
     video_path: &Path,
     config: &Config,
     pb: Option<&ProgressBar>,
+    mut streams: Option<&mut [output::StreamOutput]>,
 ) -> Result<Transcript> {
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
 
@@ -189,12 +223,16 @@ fn transcribe_with_whisper(
             }
         }
 
-        segments.push(Segment {
+        let seg = Segment {
             start: t0,
             end: t1,
             text,
             words,
-        });
+        };
+        if let Some(ref mut streams) = streams {
+            output::append_segment_to_streams(*streams, &seg)?;
+        }
+        segments.push(seg);
 
         if let Some(pb) = pb {
             let pct = ((i + 1) as f64 / n_segments as f64) * 100.0;
@@ -282,8 +320,11 @@ impl Transcriber {
 
             match self.transcribe_file(video, model_mgr, Some(&file_pb)).await {
                 Ok(transcript) => {
-                    // Write output files
-                    if let Err(e) = self.write_output(&transcript, video) {
+                    if self.config.output.streaming {
+                        // Streaming already wrote files during transcribe_file
+                        stats.success += 1;
+                        stats.total_duration_secs += transcript.duration;
+                    } else if let Err(e) = self.write_output(&transcript, video) {
                         tracing::error!("Failed to write output for {:?}: {}", video, e);
                         stats.failed += 1;
                     } else {

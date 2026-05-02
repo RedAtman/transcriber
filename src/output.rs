@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 
 /// Word-level timestamp
 #[derive(Debug, Clone, Serialize)]
@@ -27,6 +29,13 @@ pub struct Transcript {
     pub duration: f64,
     pub segments: Vec<Segment>,
     pub transcribed_at: DateTime<Utc>,
+}
+
+/// An open output file stream for progressive segment-by-segment writing
+pub struct StreamOutput {
+    pub writer: BufWriter<std::fs::File>,
+    pub format: String,
+    pub segment_count: usize,
 }
 
 use crate::error::Result;
@@ -127,6 +136,102 @@ pub fn output_file_path(
 ) -> std::path::PathBuf {
     let filename = format!("{}.transcript.{}", stem, format);
     output_dir.join(filename)
+}
+
+/// Open one output file per format for streaming writes
+pub fn open_stream_outputs(stem: &str, formats: &[String], output_dir: &Path) -> Result<Vec<StreamOutput>> {
+    let mut streams = Vec::new();
+    for fmt in formats {
+        let path = output_file_path(stem, fmt, output_dir);
+        let file = std::fs::File::create(&path).map_err(|e| crate::error::AppError::Output {
+            message: format!("Cannot create output file {:?}: {}", path, e),
+            path: Some(path),
+        })?;
+        let mut writer = BufWriter::new(file);
+
+        if fmt == "json" {
+            writeln!(writer, "[").map_err(|e| crate::error::AppError::Output {
+                message: format!("Failed to write JSON header: {}", e),
+                path: None,
+            })?;
+        }
+
+        streams.push(StreamOutput {
+            writer,
+            format: fmt.clone(),
+            segment_count: 0,
+        });
+    }
+    Ok(streams)
+}
+
+/// Append one transcribed segment to all open stream output files
+pub fn append_segment_to_streams(streams: &mut [StreamOutput], segment: &Segment) -> Result<()> {
+    for stream in streams.iter_mut() {
+        match stream.format.as_str() {
+            "txt" => {
+                writeln!(stream.writer, "{}", segment.text).map_err(|e| crate::error::AppError::Output {
+                    message: format!("Failed to write TXT segment: {}", e),
+                    path: None,
+                })?;
+            }
+            "srt" => {
+                let start = format_timestamp_srt(segment.start);
+                let end = format_timestamp_srt(segment.end);
+                write!(
+                    stream.writer,
+                    "{}\n{} --> {}\n{}\n\n",
+                    stream.segment_count + 1,
+                    start,
+                    end,
+                    segment.text,
+                ).map_err(|e| crate::error::AppError::Output {
+                    message: format!("Failed to write SRT segment: {}", e),
+                    path: None,
+                })?;
+            }
+            "json" => {
+                let seg_json = serde_json::to_string(segment).map_err(|e| crate::error::AppError::Output {
+                    message: format!("Failed to serialize JSON segment: {}", e),
+                    path: None,
+                })?;
+                if stream.segment_count > 0 {
+                    write!(stream.writer, ",\n  {}", seg_json).map_err(|e| crate::error::AppError::Output {
+                        message: format!("Failed to write JSON segment: {}", e),
+                        path: None,
+                    })?;
+                } else {
+                    write!(stream.writer, "  {}", seg_json).map_err(|e| crate::error::AppError::Output {
+                        message: format!("Failed to write JSON segment: {}", e),
+                        path: None,
+                    })?;
+                }
+            }
+            _ => unreachable!(),
+        }
+        stream.segment_count += 1;
+    }
+    Ok(())
+}
+
+/// Finalize all stream output files (write footers, flush)
+pub fn finalize_stream_outputs(streams: Vec<StreamOutput>) -> Result<()> {
+    for mut stream in streams {
+        match stream.format.as_str() {
+            "json" => {
+                writeln!(stream.writer, "\n]").map_err(|e| crate::error::AppError::Output {
+                    message: format!("Failed to write JSON footer: {}", e),
+                    path: None,
+                })?;
+            }
+            _ => {}
+        }
+        stream.writer.flush().map_err(|e| crate::error::AppError::Output {
+            message: format!("Failed to flush output file: {}", e),
+            path: None,
+        })?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

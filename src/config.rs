@@ -56,6 +56,7 @@ pub struct OutputConfig {
     pub formats: Vec<String>,
     pub directory: String,
     pub skip_existing: bool,
+    pub streaming: bool,
 }
 
 impl Default for OutputConfig {
@@ -64,6 +65,7 @@ impl Default for OutputConfig {
             formats: vec!["txt".to_string()],
             directory: "./".to_string(),
             skip_existing: true,
+            streaming: true,
         }
     }
 }
@@ -192,6 +194,7 @@ pub struct CliOverrides {
     pub no_speech_threshold: Option<f32>,
     pub max_segment_length: Option<u32>,
     pub split_on_word: Option<bool>,
+    pub streaming: Option<bool>,
 }
 
 impl Config {
@@ -239,6 +242,9 @@ impl Config {
         }
         if let Some(split_on_word) = overrides.split_on_word {
             self.inference.split_on_word = split_on_word;
+        }
+        if let Some(streaming) = overrides.streaming {
+            self.output.streaming = streaming;
         }
         if self.cache.directory.starts_with('~') {
             if let Some(home) = std::env::var_os("HOME") {
@@ -381,6 +387,7 @@ impl From<&crate::cli::Cli> for CliOverrides {
             } else {
                 None
             },
+            streaming: if cli.no_streaming { Some(false) } else { None },
         }
     }
 }
