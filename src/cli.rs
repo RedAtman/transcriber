@@ -84,6 +84,38 @@ pub struct Cli {
     )]
     pub gpu: Option<String>,
 
+    /// Initial prompt for decoder context
+    #[arg(long = "initial-prompt", value_name = "TEXT", help = "Initial prompt for decoder context")]
+    pub initial_prompt: Option<String>,
+
+    /// Sampling temperature (0.0 = deterministic, higher = more random)
+    #[arg(long = "temperature", value_name = "FLOAT", help = "Sampling temperature (0.0-1.0)")]
+    pub temperature: Option<f32>,
+
+    /// Suppress non-speech tokens (cough, background noise, etc.)
+    #[arg(long = "suppress-non-speech", help = "Suppress non-speech tokens")]
+    pub suppress_non_speech: bool,
+
+    /// No-speech detection threshold (0.0-1.0)
+    #[arg(
+        long = "no-speech-threshold",
+        value_name = "FLOAT",
+        help = "No-speech detection threshold (0.0-1.0)"
+    )]
+    pub no_speech_threshold: Option<f32>,
+
+    /// Maximum segment length in characters (0 = no limit)
+    #[arg(
+        long = "max-segment-length",
+        value_name = "N",
+        help = "Maximum segment length in characters (0 = no limit)"
+    )]
+    pub max_segment_length: Option<u32>,
+
+    /// Split timestamps on word boundaries instead of characters
+    #[arg(long = "split-on-word", help = "Split timestamps on word boundaries")]
+    pub split_on_word: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

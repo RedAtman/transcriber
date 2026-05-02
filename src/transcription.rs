@@ -116,6 +116,16 @@ fn transcribe_with_whisper(
     }
     params.set_translate(false);
 
+    // Apply inference parameters
+    if !config.inference.initial_prompt.is_empty() {
+        params.set_initial_prompt(&config.inference.initial_prompt);
+    }
+    params.set_temperature(config.inference.temperature);
+    params.set_suppress_nst(config.inference.suppress_non_speech);
+    params.set_no_speech_thold(config.inference.no_speech_threshold);
+    params.set_max_len(config.inference.max_segment_length as i32);
+    params.set_split_on_word(config.inference.split_on_word);
+
     let mut state = ctx.create_state().map_err(|e| AppError::Transcription {
         message: format!("Failed to create whisper state: {}", e),
         segment: None,

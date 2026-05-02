@@ -92,6 +92,36 @@ pub struct CacheConfig {
     pub directory: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct InferenceConfig {
+    /// Initial prompt for decoder context
+    pub initial_prompt: String,
+    /// Sampling temperature (0.0 = greedy/deterministic, higher = more random)
+    pub temperature: f32,
+    /// Suppress non-speech tokens (cough, background noise, etc.)
+    pub suppress_non_speech: bool,
+    /// No-speech detection threshold (0.0-1.0)
+    pub no_speech_threshold: f32,
+    /// Maximum segment length in characters (0 = no limit)
+    pub max_segment_length: u32,
+    /// Split timestamps on word boundaries instead of characters
+    pub split_on_word: bool,
+}
+
+impl Default for InferenceConfig {
+    fn default() -> Self {
+        Self {
+            initial_prompt: String::new(),
+            temperature: 0.0,
+            suppress_non_speech: false,
+            no_speech_threshold: 0.6,
+            max_segment_length: 0,
+            split_on_word: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -101,6 +131,7 @@ pub struct Config {
     pub output: OutputConfig,
     pub logging: LoggingConfig,
     pub cache: CacheConfig,
+    pub inference: InferenceConfig,
 }
 
 impl Default for CacheConfig {
@@ -155,6 +186,12 @@ pub struct CliOverrides {
     pub threads: Option<u32>,
     pub gpu: Option<String>,
     pub skip_existing: Option<bool>,
+    pub initial_prompt: Option<String>,
+    pub temperature: Option<f32>,
+    pub suppress_non_speech: Option<bool>,
+    pub no_speech_threshold: Option<f32>,
+    pub max_segment_length: Option<u32>,
+    pub split_on_word: Option<bool>,
 }
 
 impl Config {
@@ -184,6 +221,24 @@ impl Config {
         }
         if let Some(skip) = overrides.skip_existing {
             self.output.skip_existing = skip;
+        }
+        if let Some(initial_prompt) = overrides.initial_prompt {
+            self.inference.initial_prompt = initial_prompt;
+        }
+        if let Some(temperature) = overrides.temperature {
+            self.inference.temperature = temperature;
+        }
+        if let Some(suppress_non_speech) = overrides.suppress_non_speech {
+            self.inference.suppress_non_speech = suppress_non_speech;
+        }
+        if let Some(no_speech_threshold) = overrides.no_speech_threshold {
+            self.inference.no_speech_threshold = no_speech_threshold;
+        }
+        if let Some(max_segment_length) = overrides.max_segment_length {
+            self.inference.max_segment_length = max_segment_length;
+        }
+        if let Some(split_on_word) = overrides.split_on_word {
+            self.inference.split_on_word = split_on_word;
         }
         if self.cache.directory.starts_with('~') {
             if let Some(home) = std::env::var_os("HOME") {
@@ -259,6 +314,21 @@ impl Config {
             }
         }
 
+        // Validate inference parameters
+        if self.inference.temperature < 0.0 || self.inference.temperature > 1.0 {
+            errors.push(format!(
+                "Invalid temperature '{}'. Must be between 0.0 and 1.0.",
+                self.inference.temperature
+            ));
+        }
+
+        if self.inference.no_speech_threshold < 0.0 || self.inference.no_speech_threshold > 1.0 {
+            errors.push(format!(
+                "Invalid no_speech_threshold '{}'. Must be between 0.0 and 1.0.",
+                self.inference.no_speech_threshold
+            ));
+        }
+
         errors
     }
 }
@@ -297,6 +367,20 @@ impl From<&crate::cli::Cli> for CliOverrides {
             threads: cli.threads,
             gpu: cli.gpu.clone(),
             skip_existing: if cli.skip_existing { Some(true) } else { None },
+            initial_prompt: cli.initial_prompt.clone(),
+            temperature: cli.temperature,
+            suppress_non_speech: if cli.suppress_non_speech {
+                Some(true)
+            } else {
+                None
+            },
+            no_speech_threshold: cli.no_speech_threshold,
+            max_segment_length: cli.max_segment_length,
+            split_on_word: if cli.split_on_word {
+                Some(true)
+            } else {
+                None
+            },
         }
     }
 }
