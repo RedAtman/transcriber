@@ -142,7 +142,10 @@ fn test_output_file_path_generation() {
     use transcriber::output::output_file_path;
 
     let path = output_file_path("my_video", "srt", std::path::Path::new("/output"));
-    assert_eq!(path, std::path::PathBuf::from("/output/my_video.transcript.srt"));
+    assert_eq!(
+        path,
+        std::path::PathBuf::from("/output/my_video.transcript.srt")
+    );
 
     let path = output_file_path("video", "json", std::path::Path::new("./"));
     assert!(path.to_str().unwrap().contains("video.transcript.json"));
@@ -174,16 +177,23 @@ fn test_audio_extraction_integration() -> Result<(), Box<dyn std::error::Error>>
     let ffmpeg = which::which("ffmpeg").expect("FFmpeg not found");
     let output = std::process::Command::new(&ffmpeg)
         .args([
-            "-f", "lavfi",
-            "-i", "anullsrc=r=16000:cl=mono",
-            "-t", "1",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=16000:cl=mono",
+            "-t",
+            "1",
             "-y",
         ])
         .arg(&input_path)
         .output()?;
 
     if !output.status.success() {
-        return Err(format!("FFmpeg failed to create test audio: {:?}", String::from_utf8_lossy(&output.stderr)).into());
+        return Err(format!(
+            "FFmpeg failed to create test audio: {:?}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
 
     let rt = Runtime::new()?;
@@ -209,14 +219,16 @@ fn test_supported_video_extensions() {
 
     assert!(is_supported_video(std::path::Path::new("video.mp4")));
     assert!(is_supported_video(std::path::Path::new("video.MP4")));
-    assert!(is_supported_video(std::path::Path::new("/path/to/video.mov")));
+    assert!(is_supported_video(std::path::Path::new(
+        "/path/to/video.mov"
+    )));
     assert!(!is_supported_video(std::path::Path::new("document.pdf")));
     assert!(!is_supported_video(std::path::Path::new("audio.mp3")));
 }
 
 #[test]
 fn test_cli_overrides_merge() {
-    use transcriber::config::{Config, CliOverrides};
+    use transcriber::config::{CliOverrides, Config};
 
     let mut config = Config::default();
     assert_eq!(config.model.name, "base");

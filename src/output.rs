@@ -139,7 +139,11 @@ pub fn output_file_path(
 }
 
 /// Open one output file per format for streaming writes
-pub fn open_stream_outputs(stem: &str, formats: &[String], output_dir: &Path) -> Result<Vec<StreamOutput>> {
+pub fn open_stream_outputs(
+    stem: &str,
+    formats: &[String],
+    output_dir: &Path,
+) -> Result<Vec<StreamOutput>> {
     let mut streams = Vec::new();
     for fmt in formats {
         let path = output_file_path(stem, fmt, output_dir);
@@ -170,9 +174,11 @@ pub fn append_segment_to_streams(streams: &mut [StreamOutput], segment: &Segment
     for stream in streams.iter_mut() {
         match stream.format.as_str() {
             "txt" => {
-                writeln!(stream.writer, "{}", segment.text).map_err(|e| crate::error::AppError::Output {
-                    message: format!("Failed to write TXT segment: {}", e),
-                    path: None,
+                writeln!(stream.writer, "{}", segment.text).map_err(|e| {
+                    crate::error::AppError::Output {
+                        message: format!("Failed to write TXT segment: {}", e),
+                        path: None,
+                    }
                 })?;
             }
             "srt" => {
@@ -185,35 +191,44 @@ pub fn append_segment_to_streams(streams: &mut [StreamOutput], segment: &Segment
                     start,
                     end,
                     segment.text,
-                ).map_err(|e| crate::error::AppError::Output {
+                )
+                .map_err(|e| crate::error::AppError::Output {
                     message: format!("Failed to write SRT segment: {}", e),
                     path: None,
                 })?;
             }
             "json" => {
-                let seg_json = serde_json::to_string(segment).map_err(|e| crate::error::AppError::Output {
-                    message: format!("Failed to serialize JSON segment: {}", e),
-                    path: None,
-                })?;
-                if stream.segment_count > 0 {
-                    write!(stream.writer, ",\n  {}", seg_json).map_err(|e| crate::error::AppError::Output {
-                        message: format!("Failed to write JSON segment: {}", e),
+                let seg_json =
+                    serde_json::to_string(segment).map_err(|e| crate::error::AppError::Output {
+                        message: format!("Failed to serialize JSON segment: {}", e),
                         path: None,
                     })?;
+                if stream.segment_count > 0 {
+                    write!(stream.writer, ",\n  {}", seg_json).map_err(|e| {
+                        crate::error::AppError::Output {
+                            message: format!("Failed to write JSON segment: {}", e),
+                            path: None,
+                        }
+                    })?;
                 } else {
-                    write!(stream.writer, "  {}", seg_json).map_err(|e| crate::error::AppError::Output {
-                        message: format!("Failed to write JSON segment: {}", e),
-                        path: None,
+                    write!(stream.writer, "  {}", seg_json).map_err(|e| {
+                        crate::error::AppError::Output {
+                            message: format!("Failed to write JSON segment: {}", e),
+                            path: None,
+                        }
                     })?;
                 }
             }
             _ => unreachable!(),
         }
         // Flush after each segment so output is visible progressively
-        stream.writer.flush().map_err(|e| crate::error::AppError::Output {
-            message: format!("Failed to flush output file: {}", e),
-            path: None,
-        })?;
+        stream
+            .writer
+            .flush()
+            .map_err(|e| crate::error::AppError::Output {
+                message: format!("Failed to flush output file: {}", e),
+                path: None,
+            })?;
         stream.segment_count += 1;
     }
     Ok(())
@@ -231,9 +246,11 @@ pub fn write_stream_callback_segment(
     for stream in streams.iter_mut() {
         match stream.format.as_str() {
             "txt" => {
-                writeln!(stream.writer, "{}", text).map_err(|e| crate::error::AppError::Output {
-                    message: format!("Failed to write TXT segment: {}", e),
-                    path: None,
+                writeln!(stream.writer, "{}", text).map_err(|e| {
+                    crate::error::AppError::Output {
+                        message: format!("Failed to write TXT segment: {}", e),
+                        path: None,
+                    }
                 })?;
             }
             "srt" => {
@@ -259,31 +276,37 @@ pub fn write_stream_callback_segment(
                     "text": text,
                     "words": []
                 });
-                let json_str = serde_json::to_string(&seg_json)
-                    .map_err(|e| crate::error::AppError::Output {
+                let json_str = serde_json::to_string(&seg_json).map_err(|e| {
+                    crate::error::AppError::Output {
                         message: format!("Failed to serialize JSON segment: {}", e),
                         path: None,
-                    })?;
+                    }
+                })?;
                 if stream.segment_count > 0 {
-                    write!(stream.writer, ",\n  {}", json_str)
-                        .map_err(|e| crate::error::AppError::Output {
+                    write!(stream.writer, ",\n  {}", json_str).map_err(|e| {
+                        crate::error::AppError::Output {
                             message: format!("Failed to write JSON segment: {}", e),
                             path: None,
-                        })?;
+                        }
+                    })?;
                 } else {
-                    write!(stream.writer, "  {}", json_str)
-                        .map_err(|e| crate::error::AppError::Output {
+                    write!(stream.writer, "  {}", json_str).map_err(|e| {
+                        crate::error::AppError::Output {
                             message: format!("Failed to write JSON segment: {}", e),
                             path: None,
-                        })?;
+                        }
+                    })?;
                 }
             }
             _ => unreachable!(),
         }
-        stream.writer.flush().map_err(|e| crate::error::AppError::Output {
-            message: format!("Failed to flush output file: {}", e),
-            path: None,
-        })?;
+        stream
+            .writer
+            .flush()
+            .map_err(|e| crate::error::AppError::Output {
+                message: format!("Failed to flush output file: {}", e),
+                path: None,
+            })?;
         stream.segment_count += 1;
     }
     Ok(())
@@ -301,10 +324,13 @@ pub fn finalize_stream_outputs(streams: Vec<StreamOutput>) -> Result<()> {
             }
             _ => {}
         }
-        stream.writer.flush().map_err(|e| crate::error::AppError::Output {
-            message: format!("Failed to flush output file: {}", e),
-            path: None,
-        })?;
+        stream
+            .writer
+            .flush()
+            .map_err(|e| crate::error::AppError::Output {
+                message: format!("Failed to flush output file: {}", e),
+                path: None,
+            })?;
     }
     Ok(())
 }
@@ -406,12 +432,21 @@ mod tests {
 
         let txt_path = dir.join("test.transcript.txt");
         let txt_content = std::fs::read_to_string(&txt_path).unwrap();
-        assert_eq!(txt_content, "Hello world\n", "TXT should have first segment after flush");
+        assert_eq!(
+            txt_content, "Hello world\n",
+            "TXT should have first segment after flush"
+        );
 
         let json_path = dir.join("test.transcript.json");
         let json_content = std::fs::read_to_string(&json_path).unwrap();
-        assert!(json_content.starts_with("["), "JSON should start with array open");
-        assert!(json_content.contains("Hello world"), "JSON should contain first segment");
+        assert!(
+            json_content.starts_with("["),
+            "JSON should start with array open"
+        );
+        assert!(
+            json_content.contains("Hello world"),
+            "JSON should contain first segment"
+        );
 
         let seg2 = Segment {
             start: 2.0,
@@ -422,16 +457,25 @@ mod tests {
         append_segment_to_streams(&mut streams, &seg2).unwrap();
 
         let txt_content = std::fs::read_to_string(&txt_path).unwrap();
-        assert_eq!(txt_content, "Hello world\nSecond segment\n", "TXT should have both segments");
+        assert_eq!(
+            txt_content, "Hello world\nSecond segment\n",
+            "TXT should have both segments"
+        );
 
         let json_content = std::fs::read_to_string(&json_path).unwrap();
-        assert!(json_content.contains("Second segment"), "JSON should contain second segment");
+        assert!(
+            json_content.contains("Second segment"),
+            "JSON should contain second segment"
+        );
 
         finalize_stream_outputs(streams).unwrap();
 
         let json_content = std::fs::read_to_string(&json_path).unwrap();
-        assert!(json_content.ends_with("\n]\n") || json_content.ends_with("\n]\n"),
-            "JSON should end with array close, got: {:?}", json_content.chars().last());
+        assert!(
+            json_content.ends_with("\n]\n") || json_content.ends_with("\n]\n"),
+            "JSON should end with array close, got: {:?}",
+            json_content.chars().last()
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

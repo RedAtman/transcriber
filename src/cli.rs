@@ -85,11 +85,19 @@ pub struct Cli {
     pub gpu: Option<String>,
 
     /// Initial prompt for decoder context
-    #[arg(long = "initial-prompt", value_name = "TEXT", help = "Initial prompt for decoder context")]
+    #[arg(
+        long = "initial-prompt",
+        value_name = "TEXT",
+        help = "Initial prompt for decoder context"
+    )]
     pub initial_prompt: Option<String>,
 
     /// Sampling temperature (0.0 = deterministic, higher = more random)
-    #[arg(long = "temperature", value_name = "FLOAT", help = "Sampling temperature (0.0-1.0)")]
+    #[arg(
+        long = "temperature",
+        value_name = "FLOAT",
+        help = "Sampling temperature (0.0-1.0)"
+    )]
     pub temperature: Option<f32>,
 
     /// Suppress non-speech tokens (cough, background noise, etc.)
@@ -117,7 +125,10 @@ pub struct Cli {
     pub split_on_word: bool,
 
     /// Disable streaming output (write all at once after transcription)
-    #[arg(long = "no-streaming", help = "Disable streaming output, write files after transcription completes")]
+    #[arg(
+        long = "no-streaming",
+        help = "Disable streaming output, write files after transcription completes"
+    )]
     pub no_streaming: bool,
 
     #[command(subcommand)]

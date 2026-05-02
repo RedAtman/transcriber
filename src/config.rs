@@ -382,11 +382,7 @@ impl From<&crate::cli::Cli> for CliOverrides {
             },
             no_speech_threshold: cli.no_speech_threshold,
             max_segment_length: cli.max_segment_length,
-            split_on_word: if cli.split_on_word {
-                Some(true)
-            } else {
-                None
-            },
+            split_on_word: if cli.split_on_word { Some(true) } else { None },
             streaming: if cli.no_streaming { Some(false) } else { None },
         }
     }
