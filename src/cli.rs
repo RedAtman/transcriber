@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(
     name = "transcriber",
-    version = "0.1.0",
+    version = option_env!("TRANSCRIBER_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
     about = "A fast video transcription tool powered by whisper.cpp",
     long_about = "transcriber extracts audio from video files and transcribes it to text.\n\
                    Supports GPU acceleration (Metal/Vulkan/CUDA) and multiple output formats.\n\n\
