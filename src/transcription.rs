@@ -2,11 +2,11 @@ use crate::audio::{file_stem, is_supported_video, AudioExtractor};
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::model::ModelManager;
-use crate::output::{self, Segment, Transcript, Word};
+use crate::output::{self, FormatWriter, Segment, Transcript, Word};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Read PCM f32 samples from WAV file
 fn load_wav_as_f32(path: &Path) -> Result<Vec<f32>> {
@@ -83,39 +83,68 @@ impl Transcriber {
 
         // 4a. Set up streaming output if enabled
         let stem = file_stem(&video_path);
-        let mut streams = if self.config.output.streaming {
-            let output_dir = if self.config.output.directory == "./" {
+        let (output_dir, stream_formats) = if self.config.output.streaming {
+            let out_dir = if self.config.output.directory == "./" {
                 video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
             } else {
                 PathBuf::from(&self.config.output.directory)
             };
-            std::fs::create_dir_all(&output_dir)?;
+            std::fs::create_dir_all(&out_dir)?;
 
-            // Expand "all" format
-            let formats: Vec<String> = if self.config.output.formats.iter().any(|f| f == "all") {
+            let fmts: Vec<String> = if self.config.output.formats.iter().any(|f| f == "all") {
                 vec!["txt".to_string(), "srt".to_string(), "json".to_string()]
             } else {
                 self.config.output.formats.clone()
             };
 
-            Some(output::open_stream_outputs(&stem, &formats, &output_dir)?)
+            (Some(out_dir), Some(fmts))
         } else {
-            None
+            (None, None)
         };
 
-        // 4b. Run transcription
+        let shared_streams: Option<Arc<Mutex<Vec<output::StreamOutput>>>> =
+            if let (Some(dir), Some(fmts)) = (output_dir.as_ref(), stream_formats.as_ref()) {
+                Some(Arc::new(Mutex::new(output::open_stream_outputs(
+                    &stem, fmts, dir,
+                )?)))
+            } else {
+                None
+            };
+
+        // 4b. Run transcription (callback writes segments to streams during inference)
         let transcript = transcribe_with_whisper(
             &ctx,
             &audio_samples,
             &video_path,
             &self.config,
             pb,
-            streams.as_mut().map(|v| v.as_mut_slice()),
+            shared_streams.clone(),
         )?;
 
         // 4c. Finalize streaming output
-        if let Some(s) = streams {
-            output::finalize_stream_outputs(s)?;
+        if let Some(arc_streams) = shared_streams {
+            let streams = Arc::try_unwrap(arc_streams)
+                .unwrap_or_else(|_| {
+                    tracing::warn!("Streams Arc still referenced after transcription");
+                    // Should not happen since params/closure are dropped after full()
+                    return Mutex::new(Vec::new());
+                })
+                .into_inner()
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Mutex poisoned: {}", e);
+                    Vec::new()
+                });
+            output::finalize_stream_outputs(streams)?;
+
+            // For JSON format, regenerate with full word-level data (overwrite callback version)
+            if let (Some(dir), Some(fmts)) = (output_dir, stream_formats) {
+                if fmts.iter().any(|f| f == "json") {
+                    let json_path = output::output_file_path(&stem, "json", &dir);
+                    let json_writer = output::JsonFormat;
+                    let json_content = json_writer.write(&transcript)?;
+                    std::fs::write(&json_path, json_content)?;
+                }
+            }
         }
 
         // 5. Cleanup temp files (TempDir drops automatically)
@@ -125,14 +154,18 @@ impl Transcriber {
     }
 }
 
-/// Transcribe using whisper-rs
+/// Transcribe using whisper-rs.
+///
+/// When `shared_streams` is provided, a segment callback is installed that
+/// writes each transcribed segment to the output files incrementally during
+/// inference (true streaming). The caller must finalize the streams afterward.
 fn transcribe_with_whisper(
     ctx: &WhisperContext,
     audio_samples: &[f32],
     video_path: &Path,
     config: &Config,
     pb: Option<&ProgressBar>,
-    mut streams: Option<&mut [output::StreamOutput]>,
+    shared_streams: Option<Arc<Mutex<Vec<output::StreamOutput>>>>,
 ) -> Result<Transcript> {
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
 
@@ -159,6 +192,30 @@ fn transcribe_with_whisper(
     params.set_no_speech_thold(config.inference.no_speech_threshold);
     params.set_max_len(config.inference.max_segment_length as i32);
     params.set_split_on_word(config.inference.split_on_word);
+
+    // Install streaming callback: writes each segment to output files during inference
+    if let Some(ref arc_streams) = shared_streams {
+        let cb_streams = arc_streams.clone();
+        params.set_segment_callback_safe(move |data: whisper_rs::SegmentCallbackData| {
+            let mut streams_guard = match cb_streams.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    tracing::error!("Stream mutex poisoned: {}", e);
+                    return;
+                }
+            };
+            let start_secs = data.start_timestamp as f64 / 100.0;
+            let end_secs = data.end_timestamp as f64 / 100.0;
+            if let Err(e) = output::write_stream_callback_segment(
+                &mut streams_guard,
+                start_secs,
+                end_secs,
+                &data.text,
+            ) {
+                tracing::error!("Streaming write failed: {}", e);
+            }
+        });
+    }
 
     let mut state = ctx.create_state().map_err(|e| AppError::Transcription {
         message: format!("Failed to create whisper state: {}", e),
@@ -229,9 +286,6 @@ fn transcribe_with_whisper(
             text,
             words,
         };
-        if let Some(ref mut streams) = streams {
-            output::append_segment_to_streams(*streams, &seg)?;
-        }
         segments.push(seg);
 
         if let Some(pb) = pb {

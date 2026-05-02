@@ -219,6 +219,76 @@ pub fn append_segment_to_streams(streams: &mut [StreamOutput], segment: &Segment
     Ok(())
 }
 
+/// Append one segment (from whisper callback) to all open stream output files.
+/// Unlike append_segment_to_streams, this takes raw data without word tokens,
+/// allowing it to be called from within the whisper inference callback.
+pub fn write_stream_callback_segment(
+    streams: &mut [StreamOutput],
+    start_secs: f64,
+    end_secs: f64,
+    text: &str,
+) -> Result<()> {
+    for stream in streams.iter_mut() {
+        match stream.format.as_str() {
+            "txt" => {
+                writeln!(stream.writer, "{}", text).map_err(|e| crate::error::AppError::Output {
+                    message: format!("Failed to write TXT segment: {}", e),
+                    path: None,
+                })?;
+            }
+            "srt" => {
+                let start = format_timestamp_srt(start_secs);
+                let end = format_timestamp_srt(end_secs);
+                write!(
+                    stream.writer,
+                    "{}\n{} --> {}\n{}\n\n",
+                    stream.segment_count + 1,
+                    start,
+                    end,
+                    text,
+                )
+                .map_err(|e| crate::error::AppError::Output {
+                    message: format!("Failed to write SRT segment: {}", e),
+                    path: None,
+                })?;
+            }
+            "json" => {
+                let seg_json = serde_json::json!({
+                    "start": start_secs,
+                    "end": end_secs,
+                    "text": text,
+                    "words": []
+                });
+                let json_str = serde_json::to_string(&seg_json)
+                    .map_err(|e| crate::error::AppError::Output {
+                        message: format!("Failed to serialize JSON segment: {}", e),
+                        path: None,
+                    })?;
+                if stream.segment_count > 0 {
+                    write!(stream.writer, ",\n  {}", json_str)
+                        .map_err(|e| crate::error::AppError::Output {
+                            message: format!("Failed to write JSON segment: {}", e),
+                            path: None,
+                        })?;
+                } else {
+                    write!(stream.writer, "  {}", json_str)
+                        .map_err(|e| crate::error::AppError::Output {
+                            message: format!("Failed to write JSON segment: {}", e),
+                            path: None,
+                        })?;
+                }
+            }
+            _ => unreachable!(),
+        }
+        stream.writer.flush().map_err(|e| crate::error::AppError::Output {
+            message: format!("Failed to flush output file: {}", e),
+            path: None,
+        })?;
+        stream.segment_count += 1;
+    }
+    Ok(())
+}
+
 /// Finalize all stream output files (write footers, flush)
 pub fn finalize_stream_outputs(streams: Vec<StreamOutput>) -> Result<()> {
     for mut stream in streams {
