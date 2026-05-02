@@ -26,6 +26,10 @@ jobs:
             git diff
             exit 1
           fi
+      - name: Install taplo
+        run: cargo install taplo-cli --locked
+      - name: Check TOML formatting
+        run: taplo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:

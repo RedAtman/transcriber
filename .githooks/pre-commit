@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Pre-commit hook: auto-format Rust and TOML files before each commit.
+# Skips TOML formatting if `taplo` is not installed (prints a warning).
+
+set -e
+
+echo "→ Running cargo fmt..."
+cargo fmt --all
+
+if command -v taplo &>/dev/null; then
+    echo "→ Running taplo fmt..."
+    taplo fmt
+else
+    echo "⚠ taplo not found — skipping TOML formatting. Install with: cargo install taplo-cli"
+fi
+
+# Re-stage any files that were modified by formatting
+git add -u
+
+echo "✓ Formatting complete"
