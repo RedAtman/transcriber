@@ -89,6 +89,11 @@ impl Transcriber {
         let user_metadata = self.config.user_metadata.clone();
 
         // 4a. Set up streaming output if enabled
+        tracing::info!(
+            "Streaming output: {}. Formats: {:?}",
+            self.config.output.streaming,
+            self.config.output.formats,
+        );
         let stem = file_stem(&video_path);
         let (output_dir, stream_formats, has_md) = if self.config.output.streaming {
             let out_dir = if self.config.output.directory == "./" {
@@ -145,17 +150,14 @@ impl Transcriber {
 
         // 4c. Finalize streaming output
         if let Some(arc_streams) = shared_streams {
-            let streams = Arc::try_unwrap(arc_streams)
-                .unwrap_or_else(|_| {
-                    tracing::warn!("Streams Arc still referenced after transcription");
-                    // Should not happen since params/closure are dropped after full()
-                    Mutex::new(Vec::new())
-                })
-                .into_inner()
-                .unwrap_or_else(|e| {
-                    tracing::warn!("Mutex poisoned: {}", e);
-                    Vec::new()
-                });
+            // Take the Vec out from under the lock rather than trying to
+            // unwrap the Arc (which requires exactly one strong reference).
+            let mut guard = arc_streams.lock().map_err(|e| AppError::Output {
+                message: format!("Stream mutex poisoned: {}", e),
+                path: None,
+            })?;
+            let streams = std::mem::take(&mut *guard);
+            drop(guard);
             output::finalize_stream_outputs(streams)?;
 
             // Regenerate JSON with full word-level data (overwrite callback version)

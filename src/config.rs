@@ -420,3 +420,37 @@ impl From<&crate::cli::Cli> for CliOverrides {
         }
     }
 }
+
+#[cfg(test)]
+mod streaming_default_tests {
+    use super::*;
+
+    #[test]
+    fn test_streaming_defaults_to_true_when_missing() {
+        let yaml = r#"
+output:
+  formats:
+    - txt
+  directory: ./
+  skip_existing: true
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert!(
+            config.output.streaming,
+            "streaming should default to true when missing from YAML"
+        );
+    }
+
+    #[test]
+    fn test_streaming_defaults_to_true_when_output_missing() {
+        let yaml = r#"
+model:
+  name: base
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert!(
+            config.output.streaming,
+            "streaming should default to true when output section is missing"
+        );
+    }
+}
