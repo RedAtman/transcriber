@@ -1,4 +1,5 @@
 use crate::error::{AppError, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -20,6 +21,8 @@ pub struct SourceInfo {
     pub format: String,
     pub bitrate: Option<u64>,
     pub duration_secs: f64,
+    pub created_at: Option<String>,
+    pub modified_at: Option<String>,
 }
 
 /// Video stream information
@@ -89,7 +92,16 @@ impl MediaProbe {
             .unwrap_or("unknown")
             .to_string();
 
-        let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        let fs_meta = std::fs::metadata(path).ok();
+        let size_bytes = fs_meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let created_at = fs_meta.as_ref().and_then(|m| m.created().ok()).map(|t| {
+            let dt: DateTime<Utc> = t.into();
+            dt.to_rfc3339()
+        });
+        let modified_at = fs_meta.and_then(|m| m.modified().ok()).map(|t| {
+            let dt: DateTime<Utc> = t.into();
+            dt.to_rfc3339()
+        });
 
         MediaMetadata {
             source: SourceInfo {
@@ -98,6 +110,8 @@ impl MediaProbe {
                 format: ext,
                 bitrate: None,
                 duration_secs: 0.0,
+                created_at,
+                modified_at,
             },
             video: None,
             audio: None,
@@ -112,12 +126,34 @@ impl MediaProbe {
             .unwrap_or("unknown")
             .to_string();
 
+        // ffprobe's format_name can be a comma-separated demuxer family
+        // (e.g. "mov,mp4,m4a,3gp,3g2,mj2"). Use the file extension
+        // instead — it's more specific and user-friendly.
+        let format = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        // File system timestamps (what Finder shows as "创建时间"/"修改时间")
+        let fs_meta = std::fs::metadata(path).ok();
+        let created_at = fs_meta.as_ref().and_then(|m| m.created().ok()).map(|t| {
+            let dt: DateTime<Utc> = t.into();
+            dt.to_rfc3339()
+        });
+        let modified_at = fs_meta.and_then(|m| m.modified().ok()).map(|t| {
+            let dt: DateTime<Utc> = t.into();
+            dt.to_rfc3339()
+        });
+
         let source = SourceInfo {
             filename,
             size_bytes: raw.format.size.parse().unwrap_or(0),
-            format: raw.format.format_name,
+            format,
             bitrate: raw.format.bit_rate.and_then(|b| b.parse().ok()),
             duration_secs: raw.format.duration.parse().unwrap_or(0.0),
+            created_at,
+            modified_at,
         };
 
         let mut video: Option<VideoInfo> = None;
@@ -261,6 +297,14 @@ mod tests {
         assert_eq!(meta.source.filename, "test.mp4");
         assert_eq!(meta.source.format, "mp4");
         assert!(meta.source.size_bytes > 0);
+        assert!(
+            meta.source.created_at.is_some(),
+            "filesystem birthtime should be set"
+        );
+        assert!(
+            meta.source.modified_at.is_some(),
+            "filesystem mtime should be set"
+        );
         assert!(meta.video.is_none());
         assert!(meta.audio.is_none());
     }
@@ -293,7 +337,8 @@ mod tests {
                 "bit_rate": "2500000",
                 "tags": {
                     "title": "My Video",
-                    "artist": "Creator"
+                    "artist": "Creator",
+                    "creation_time": "2024-06-15T10:30:00.000000Z"
                 }
             }
         });
@@ -307,6 +352,14 @@ mod tests {
         assert_eq!(meta.source.format, "mp4");
         assert_eq!(meta.source.bitrate, Some(2500000));
         assert!((meta.source.duration_secs - 120.5).abs() < 0.001);
+        assert!(
+            meta.source.created_at.is_none(),
+            "filesystem timestamps require real file"
+        );
+        assert!(
+            meta.source.modified_at.is_none(),
+            "filesystem timestamps require real file"
+        );
 
         let v = meta.video.unwrap();
         assert_eq!(v.codec, "h264");

@@ -546,6 +546,8 @@ mod tests {
                 format: "mp4".to_string(),
                 bitrate: Some(1000000),
                 duration_secs: 10.5,
+                created_at: None,
+                modified_at: None,
             },
             video: Some(crate::metadata::VideoInfo {
                 codec: "h264".to_string(),

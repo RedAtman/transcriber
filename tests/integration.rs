@@ -261,6 +261,8 @@ fn test_md_format_output() -> Result<(), Box<dyn std::error::Error>> {
             format: "mp4".to_string(),
             bitrate: Some(2000000),
             duration_secs: 60.0,
+            created_at: Some("2024-06-15T10:30:00.000000Z".to_string()),
+            modified_at: None,
         },
         video: Some(VideoInfo {
             codec: "h264".to_string(),
@@ -377,6 +379,7 @@ fn test_md_null_stripping() -> Result<(), Box<dyn std::error::Error>> {
     use transcriber::output::{FormatWriter, MdFormat, Segment, Transcript};
 
     // All optional fields set to None — they should not appear in YAML
+    // All optional fields set to None — they should not appear in YAML
     let meta = MediaMetadata {
         source: SourceInfo {
             filename: "video.mp4".to_string(),
@@ -384,6 +387,8 @@ fn test_md_null_stripping() -> Result<(), Box<dyn std::error::Error>> {
             format: "mp4".to_string(),
             bitrate: None,
             duration_secs: 60.0,
+            created_at: None,
+            modified_at: None,
         },
         video: Some(VideoInfo {
             codec: "h264".to_string(),

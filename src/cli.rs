@@ -11,7 +11,9 @@ use clap::{Parser, Subcommand};
                      transcriber -i video.mp4\n\
                      transcriber -d ./videos -l zh -m medium\n\
                      transcriber init\n\
-                     transcriber -i input.mp4 -o ./output --format srt"
+                     transcriber -i input.mp4 -o ./output --format srt\n\
+                     transcriber -i video.mp4 --format md\n\
+                     transcriber -i video.mp4 --format md --meta title=\"My Talk\" --meta location=Beijing"
 )]
 pub struct Cli {
     /// Input video file path
@@ -64,7 +66,7 @@ pub struct Cli {
     #[arg(
         long = "format",
         value_name = "FMT",
-        help = "Output format: txt/srt/json/all (comma separated)"
+        help = "Output format: txt/srt/json/md/all (comma separated)"
     )]
     pub format: Option<String>,
 
