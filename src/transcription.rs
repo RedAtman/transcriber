@@ -114,12 +114,9 @@ impl Transcriber {
                 self.config.output.formats.clone()
             };
 
-            // md format cannot be streamed (needs full metadata), regenerate at end
-            let stream_fmts: Vec<String> = fmts
-                .iter()
-                .filter(|f| f.as_str() != "md")
-                .cloned()
-                .collect();
+            // md is streamed as raw text first, then regenerated with full
+            // YAML front matter at the end (see finalization below).
+            let stream_fmts = fmts.clone();
             let has_md = fmts.iter().any(|f| f == "md");
 
             (Some(out_dir), Some(stream_fmts), has_md)

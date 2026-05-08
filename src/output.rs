@@ -403,6 +403,16 @@ pub fn write_stream_callback_segment(
                     })?;
                 }
             }
+            "md" => {
+                // Stream raw text first; final file is regenerated with YAML
+                // front matter after transcription completes.
+                writeln!(stream.writer, "{}", text).map_err(|e| {
+                    crate::error::AppError::Output {
+                        message: format!("Failed to write MD segment: {}", e),
+                        path: None,
+                    }
+                })?;
+            }
             _ => unreachable!(),
         }
         stream
