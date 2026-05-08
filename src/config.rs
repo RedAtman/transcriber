@@ -143,7 +143,7 @@ pub struct Config {
     pub logging: LoggingConfig,
     pub cache: CacheConfig,
     pub inference: InferenceConfig,
-    pub user_metadata: HashMap<String, String>,
+    pub custom_metadata: HashMap<String, String>,
 }
 
 impl Default for CacheConfig {
@@ -205,7 +205,7 @@ pub struct CliOverrides {
     pub max_segment_length: Option<u32>,
     pub split_on_word: Option<bool>,
     pub streaming: Option<bool>,
-    pub user_metadata: HashMap<String, String>,
+    pub custom_metadata: HashMap<String, String>,
 }
 
 impl Config {
@@ -262,8 +262,8 @@ impl Config {
         if let Some(streaming) = overrides.streaming {
             self.output.streaming = streaming;
         }
-        if !overrides.user_metadata.is_empty() {
-            self.user_metadata = overrides.user_metadata;
+        if !overrides.custom_metadata.is_empty() {
+            self.custom_metadata = overrides.custom_metadata;
         }
         if self.cache.directory.starts_with('~') {
             if let Some(home) = std::env::var_os("HOME") {
@@ -394,10 +394,10 @@ fn parse_meta_pair(s: &str) -> (String, String) {
 
 impl From<&crate::cli::Cli> for CliOverrides {
     fn from(cli: &crate::cli::Cli) -> Self {
-        let user_metadata = cli.meta.iter().map(|m| parse_meta_pair(m)).collect();
+        let custom_metadata = cli.meta.iter().map(|m| parse_meta_pair(m)).collect();
 
         CliOverrides {
-            user_metadata,
+            custom_metadata,
             model: cli.model.clone(),
             language: cli.language.clone(),
             output_dir: cli.output.clone(),

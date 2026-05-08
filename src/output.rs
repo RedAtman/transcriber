@@ -30,7 +30,7 @@ pub struct Transcript {
     pub segments: Vec<Segment>,
     pub transcribed_at: DateTime<Utc>,
     pub media_metadata: Option<crate::metadata::MediaMetadata>,
-    pub user_metadata: std::collections::HashMap<String, String>,
+    pub custom_metadata: std::collections::HashMap<String, String>,
 }
 
 /// An open output file stream for progressive segment-by-segment writing
@@ -155,13 +155,13 @@ impl FormatWriter for MdFormat {
             serde_yaml::Value::Mapping(trans_info),
         );
 
-        if !transcript.user_metadata.is_empty() {
+        if !transcript.custom_metadata.is_empty() {
             let um: serde_yaml::Mapping = transcript
-                .user_metadata
+                .custom_metadata
                 .iter()
                 .map(|(k, v)| (k.as_str().into(), v.as_str().into()))
                 .collect();
-            map.insert("user_metadata".into(), serde_yaml::Value::Mapping(um));
+            map.insert("custom_metadata".into(), serde_yaml::Value::Mapping(um));
         }
 
         let mut out = String::from("---\n");
@@ -473,7 +473,7 @@ mod tests {
             ],
             transcribed_at: Utc::now(),
             media_metadata: None,
-            user_metadata: std::collections::HashMap::new(),
+            custom_metadata: std::collections::HashMap::new(),
         }
     }
 
@@ -582,7 +582,7 @@ mod tests {
 
         let transcript = Transcript {
             media_metadata: Some(meta),
-            user_metadata: user_meta,
+            custom_metadata: user_meta,
             ..sample_transcript()
         };
         let formatter = MdFormat;
@@ -605,7 +605,7 @@ mod tests {
         assert!(output.contains("title: Test"));
 
         // User metadata
-        assert!(output.contains("user_metadata"));
+        assert!(output.contains("custom_metadata"));
         assert!(output.contains("description: A test"));
 
         // Transcription metadata

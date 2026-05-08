@@ -130,7 +130,7 @@ Default config location: `~/.config/transcriber/config.yaml`
 - **TXT**: Plain text, one segment per line
 - **SRT**: SubRip subtitle format with timestamps
 - **JSON**: Structured data with word-level timing and metadata
-- **MD**: Markdown with YAML front matter — includes auto-detected media metadata (source, video, audio info), custom user metadata, and plain text body (no timestamps)
+- **MD**: Markdown with YAML front matter — includes auto-detected media metadata (source, video, audio info), custom metadata, and plain text body (no timestamps)
 
 ## License
 

@@ -59,9 +59,9 @@ inference:
   # Split timestamps on word boundaries
   split_on_word: false
 
-# User-defined metadata injected into markdown (md) output as YAML front matter.
+# Custom metadata injected into markdown (md) output as YAML front matter.
 # These are arbitrary key-value pairs. Also configurable via --meta key=value CLI.
-# user_metadata:
+# custom_metadata:
 #   description: "Lecture recording"
 #   speaker: "John Doe"
 #   location: "Beijing"

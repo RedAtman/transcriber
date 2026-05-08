@@ -86,7 +86,7 @@ impl Transcriber {
         let media_metadata = crate::metadata::MediaProbe::probe(&video_path).ok();
 
         // 3b. User-provided metadata from config / CLI
-        let user_metadata = self.config.user_metadata.clone();
+        let custom_metadata = self.config.custom_metadata.clone();
 
         // 4a. Set up streaming output if enabled
         tracing::info!(
@@ -142,7 +142,7 @@ impl Transcriber {
             pb,
             shared_streams.clone(),
             media_metadata,
-            user_metadata,
+            custom_metadata,
         )?;
 
         // 4c. Finalize streaming output
@@ -197,7 +197,7 @@ fn transcribe_with_whisper(
     pb: Option<&ProgressBar>,
     shared_streams: Option<Arc<Mutex<Vec<output::StreamOutput>>>>,
     media_metadata: Option<crate::metadata::MediaMetadata>,
-    user_metadata: HashMap<String, String>,
+    custom_metadata: HashMap<String, String>,
 ) -> Result<Transcript> {
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
 
@@ -338,7 +338,7 @@ fn transcribe_with_whisper(
         segments,
         transcribed_at: Utc::now(),
         media_metadata,
-        user_metadata,
+        custom_metadata,
     })
 }
 

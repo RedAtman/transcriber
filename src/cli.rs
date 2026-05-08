@@ -126,11 +126,11 @@ pub struct Cli {
     #[arg(long = "split-on-word", help = "Split timestamps on word boundaries")]
     pub split_on_word: bool,
 
-    /// User-provided metadata key=value pairs (repeatable)
+    /// Custom metadata key=value pairs (repeatable)
     #[arg(
         long = "meta",
         value_name = "KEY=VALUE",
-        help = "User metadata key=value pair (can be specified multiple times)",
+        help = "Custom metadata key=value pair (can be specified multiple times)",
         num_args = 0..,
         action = clap::ArgAction::Append,
     )]

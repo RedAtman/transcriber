@@ -296,7 +296,7 @@ fn test_md_format_output() -> Result<(), Box<dyn std::error::Error>> {
         }],
         transcribed_at: chrono::Utc::now(),
         media_metadata: Some(meta),
-        user_metadata: user_meta,
+        custom_metadata: user_meta,
     };
 
     let output = MdFormat.write(&transcript)?;
@@ -336,14 +336,14 @@ fn test_meta_parsing() {
     ]);
     let overrides = CliOverrides::from(&cli);
     assert_eq!(
-        overrides.user_metadata.get("key1"),
+        overrides.custom_metadata.get("key1"),
         Some(&"value1".to_string())
     );
     assert_eq!(
-        overrides.user_metadata.get("key2"),
+        overrides.custom_metadata.get("key2"),
         Some(&"value2".to_string())
     );
-    assert_eq!(overrides.user_metadata.len(), 2);
+    assert_eq!(overrides.custom_metadata.len(), 2);
 }
 
 #[test]
@@ -354,22 +354,25 @@ fn test_meta_parsing_no_value() {
 
     let cli = Cli::parse_from(["transcriber", "-i", "test.mp4", "--meta", "flag"]);
     let overrides = CliOverrides::from(&cli);
-    assert_eq!(overrides.user_metadata.get("flag"), Some(&"".to_string()));
+    assert_eq!(overrides.custom_metadata.get("flag"), Some(&"".to_string()));
 }
 
 #[test]
-fn test_config_user_metadata_merge() {
+fn test_config_custom_metadata_merge() {
     use transcriber::config::Config;
 
     let mut config = Config::default();
-    assert!(config.user_metadata.is_empty());
+    assert!(config.custom_metadata.is_empty());
 
     let overrides = transcriber::config::CliOverrides {
-        user_metadata: [("key1".into(), "val1".into())].into(),
+        custom_metadata: [("key1".into(), "val1".into())].into(),
         ..Default::default()
     };
     config.merge_with_cli(overrides);
-    assert_eq!(config.user_metadata.get("key1"), Some(&"val1".to_string()));
+    assert_eq!(
+        config.custom_metadata.get("key1"),
+        Some(&"val1".to_string())
+    );
 }
 
 #[test]
@@ -419,7 +422,7 @@ fn test_md_null_stripping() -> Result<(), Box<dyn std::error::Error>> {
         }],
         transcribed_at: chrono::Utc::now(),
         media_metadata: Some(meta),
-        user_metadata: HashMap::new(),
+        custom_metadata: HashMap::new(),
     };
 
     let output = MdFormat.write(&transcript)?;
