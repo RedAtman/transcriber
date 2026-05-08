@@ -4,6 +4,7 @@ use crate::error::{AppError, Result};
 use crate::model::ModelManager;
 use crate::output::{self, FormatWriter, Segment, Transcript, Word};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -81,9 +82,15 @@ impl Transcriber {
         }
         let audio_samples = load_wav_as_f32(&audio_path)?;
 
+        // 3a. Probe media metadata (non-fatal — continue on failure)
+        let media_metadata = crate::metadata::MediaProbe::probe(&video_path).ok();
+
+        // 3b. User-provided metadata from config / CLI
+        let user_metadata = self.config.user_metadata.clone();
+
         // 4a. Set up streaming output if enabled
         let stem = file_stem(&video_path);
-        let (output_dir, stream_formats) = if self.config.output.streaming {
+        let (output_dir, stream_formats, has_md) = if self.config.output.streaming {
             let out_dir = if self.config.output.directory == "./" {
                 video_path.parent().unwrap_or(Path::new(".")).to_path_buf()
             } else {
@@ -92,14 +99,27 @@ impl Transcriber {
             std::fs::create_dir_all(&out_dir)?;
 
             let fmts: Vec<String> = if self.config.output.formats.iter().any(|f| f == "all") {
-                vec!["txt".to_string(), "srt".to_string(), "json".to_string()]
+                vec![
+                    "txt".to_string(),
+                    "srt".to_string(),
+                    "json".to_string(),
+                    "md".to_string(),
+                ]
             } else {
                 self.config.output.formats.clone()
             };
 
-            (Some(out_dir), Some(fmts))
+            // md format cannot be streamed (needs full metadata), regenerate at end
+            let stream_fmts: Vec<String> = fmts
+                .iter()
+                .filter(|f| f.as_str() != "md")
+                .cloned()
+                .collect();
+            let has_md = fmts.iter().any(|f| f == "md");
+
+            (Some(out_dir), Some(stream_fmts), has_md)
         } else {
-            (None, None)
+            (None, None, false)
         };
 
         let shared_streams: Option<Arc<Mutex<Vec<output::StreamOutput>>>> =
@@ -119,6 +139,8 @@ impl Transcriber {
             &self.config,
             pb,
             shared_streams.clone(),
+            media_metadata,
+            user_metadata,
         )?;
 
         // 4c. Finalize streaming output
@@ -136,13 +158,21 @@ impl Transcriber {
                 });
             output::finalize_stream_outputs(streams)?;
 
-            // For JSON format, regenerate with full word-level data (overwrite callback version)
-            if let (Some(dir), Some(fmts)) = (output_dir, stream_formats) {
-                if fmts.iter().any(|f| f == "json") {
+            // Regenerate JSON with full word-level data (overwrite callback version)
+            if let Some(dir) = output_dir {
+                if stream_formats
+                    .as_ref()
+                    .is_some_and(|fmts| fmts.iter().any(|f| f == "json"))
+                {
                     let json_path = output::output_file_path(&stem, "json", &dir);
-                    let json_writer = output::JsonFormat;
-                    let json_content = json_writer.write(&transcript)?;
+                    let json_content = output::JsonFormat.write(&transcript)?;
                     std::fs::write(&json_path, json_content)?;
+                }
+                // md format cannot be streamed — regenerate from full transcript here
+                if has_md {
+                    let md_path = output::output_file_path(&stem, "md", &dir);
+                    let md_content = output::MdFormat.write(&transcript)?;
+                    std::fs::write(&md_path, md_content)?;
                 }
             }
         }
@@ -159,6 +189,7 @@ impl Transcriber {
 /// When `shared_streams` is provided, a segment callback is installed that
 /// writes each transcribed segment to the output files incrementally during
 /// inference (true streaming). The caller must finalize the streams afterward.
+#[allow(clippy::too_many_arguments)]
 fn transcribe_with_whisper(
     ctx: &WhisperContext,
     audio_samples: &[f32],
@@ -166,6 +197,8 @@ fn transcribe_with_whisper(
     config: &Config,
     pb: Option<&ProgressBar>,
     shared_streams: Option<Arc<Mutex<Vec<output::StreamOutput>>>>,
+    media_metadata: Option<crate::metadata::MediaMetadata>,
+    user_metadata: HashMap<String, String>,
 ) -> Result<Transcript> {
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
 
@@ -305,6 +338,8 @@ fn transcribe_with_whisper(
         duration,
         segments,
         transcribed_at: Utc::now(),
+        media_metadata,
+        user_metadata,
     })
 }
 
@@ -444,7 +479,7 @@ impl Transcriber {
 
         // Check if formats includes "all"
         let formats: Vec<&str> = if self.config.output.formats.iter().any(|f| f == "all") {
-            vec!["txt", "srt", "json"]
+            vec!["txt", "srt", "json", "md"]
         } else {
             self.config
                 .output

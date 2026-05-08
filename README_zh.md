@@ -6,7 +6,7 @@
 
 - **视频 → 音频 → 文本**：通过 FFmpeg 自动提取音频
 - **GPU 加速**：支持 Metal (macOS M*)、Vulkan (NVIDIA)、CUDA 或 CPU 回退
-- **多种输出格式**：TXT、SRT（字幕）、JSON（包含词级时间戳）
+- **多种输出格式**：TXT、SRT（字幕）、JSON（包含词级时间戳）、MD（带 YAML 头部元数据的 Markdown）
 - **批量处理**：递归转录整个目录
 - **模型量化**：Q4_K/Q5_K/Q6_K/Q8_0 精度级别，速度与大小可权衡
 - **可配置**：YAML 配置文件，支持 CLI 参数覆盖
@@ -81,6 +81,18 @@ transcriber -i video.mp4 --split-on-word
 transcriber -i video.mp4 -m medium -l zh --initial-prompt "科技" --temperature 0.3
 ```
 
+### 媒体元信息
+
+```bash
+# 添加自定义元信息（存储在 Markdown YAML 头部）
+transcriber -i video.mp4 --format md --meta title="我的演讲" --meta location=北京
+
+# 使用 md 格式时，媒体元信息通过 ffprobe 自动检测：
+#   - source: 文件名、大小、格式、码率、时长
+#   - video: 编码、分辨率、帧率
+#   - audio: 编码、采样率、声道数
+```
+
 ### 配置
 
 ```bash
@@ -108,6 +120,7 @@ transcriber -i video.mp4 --config ./my-config.yaml
 - **TXT**：纯文本，每段一行
 - **SRT**：SubRip 字幕格式，包含时间戳
 - **JSON**：结构化数据，包含元数据和词级时间
+- **MD**：带 YAML 头部的 Markdown — 包含自动检测的媒体元信息（来源、视频、音频）、用户自定义元信息和纯文本正文（无时间戳）
 
 ## 许可证
 

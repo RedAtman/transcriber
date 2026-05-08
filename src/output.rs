@@ -29,6 +29,8 @@ pub struct Transcript {
     pub duration: f64,
     pub segments: Vec<Segment>,
     pub transcribed_at: DateTime<Utc>,
+    pub media_metadata: Option<crate::metadata::MediaMetadata>,
+    pub user_metadata: std::collections::HashMap<String, String>,
 }
 
 /// An open output file stream for progressive segment-by-segment writing
@@ -115,12 +117,115 @@ impl FormatWriter for JsonFormat {
     }
 }
 
+/// Markdown format: YAML front matter + plain text body (no timestamps)
+pub struct MdFormat;
+
+impl FormatWriter for MdFormat {
+    fn extension(&self) -> &'static str {
+        "md"
+    }
+
+    fn write(&self, transcript: &Transcript) -> Result<String> {
+        let mut map = serde_yaml::Mapping::new();
+
+        if let Some(ref meta) = transcript.media_metadata {
+            insert_yaml(&mut map, "source", &meta.source);
+            if let Some(ref v) = meta.video {
+                insert_yaml(&mut map, "video", v);
+            }
+            if let Some(ref a) = meta.audio {
+                insert_yaml(&mut map, "audio", a);
+            }
+            if !meta.media_tags.is_empty() {
+                insert_yaml(&mut map, "media_tags", &meta.media_tags);
+            }
+        }
+
+        let trans_info = serde_yaml::Mapping::from_iter([
+            ("model".into(), transcript.model.as_str().into()),
+            ("language".into(), transcript.language.as_str().into()),
+            ("duration".into(), transcript.duration.into()),
+            (
+                "transcribed_at".into(),
+                transcript.transcribed_at.to_rfc3339().into(),
+            ),
+        ]);
+        map.insert(
+            "transcription".into(),
+            serde_yaml::Value::Mapping(trans_info),
+        );
+
+        if !transcript.user_metadata.is_empty() {
+            let um: serde_yaml::Mapping = transcript
+                .user_metadata
+                .iter()
+                .map(|(k, v)| (k.as_str().into(), v.as_str().into()))
+                .collect();
+            map.insert("user_metadata".into(), serde_yaml::Value::Mapping(um));
+        }
+
+        let mut out = String::from("---\n");
+        out.push_str(
+            &serde_yaml::to_string(&map).map_err(|e| crate::error::AppError::Output {
+                message: format!("Failed to serialize YAML front matter: {}", e),
+                path: None,
+            })?,
+        );
+        out.push_str("---\n\n");
+
+        for segment in &transcript.segments {
+            out.push_str(&segment.text);
+            out.push('\n');
+            out.push('\n');
+        }
+
+        Ok(out)
+    }
+}
+
+fn insert_yaml<T: serde::Serialize>(map: &mut serde_yaml::Mapping, key: &str, value: &T) {
+    if let Ok(v) = serde_yaml::to_value(value) {
+        if let Some(cleaned) = strip_nulls(v) {
+            map.insert(key.into(), cleaned);
+        }
+    }
+}
+
+/// Recursively remove null values from a YAML value tree.
+/// Returns None if the entire value is null or becomes empty after stripping.
+fn strip_nulls(v: serde_yaml::Value) -> Option<serde_yaml::Value> {
+    match v {
+        serde_yaml::Value::Null => None,
+        serde_yaml::Value::Mapping(map) => {
+            let cleaned: serde_yaml::Mapping = map
+                .into_iter()
+                .filter_map(|(k, v)| strip_nulls(v).map(|cv| (k, cv)))
+                .collect();
+            if cleaned.is_empty() {
+                None
+            } else {
+                Some(serde_yaml::Value::Mapping(cleaned))
+            }
+        }
+        serde_yaml::Value::Sequence(seq) => {
+            let cleaned: Vec<serde_yaml::Value> = seq.into_iter().filter_map(strip_nulls).collect();
+            if cleaned.is_empty() {
+                None
+            } else {
+                Some(serde_yaml::Value::Sequence(cleaned))
+            }
+        }
+        other => Some(other),
+    }
+}
+
 /// Get FormatWriter by format name
 pub fn get_format_writer(format: &str) -> Option<Box<dyn FormatWriter>> {
     match format {
         "txt" => Some(Box::new(TxtFormat)),
         "srt" => Some(Box::new(SrtFormat)),
         "json" => Some(Box::new(JsonFormat)),
+        "md" => Some(Box::new(MdFormat)),
         _ => None,
     }
 }
@@ -357,6 +462,8 @@ mod tests {
                 },
             ],
             transcribed_at: Utc::now(),
+            media_metadata: None,
+            user_metadata: std::collections::HashMap::new(),
         }
     }
 
@@ -407,7 +514,95 @@ mod tests {
         assert!(get_format_writer("txt").is_some());
         assert!(get_format_writer("srt").is_some());
         assert!(get_format_writer("json").is_some());
+        assert!(get_format_writer("md").is_some());
         assert!(get_format_writer("invalid").is_none());
+    }
+
+    #[test]
+    fn test_md_format_plain() {
+        let transcript = sample_transcript();
+        let formatter = MdFormat;
+        let output = formatter.write(&transcript).unwrap();
+
+        // YAML front matter markers
+        assert!(output.starts_with("---\n"));
+        assert!(output.contains("---\n\n"));
+
+        // Should contain transcription info
+        assert!(output.contains("model: base"));
+        assert!(output.contains("language: zh"));
+
+        // Body text (plain, no timestamps)
+        assert!(output.contains("first segment"));
+        assert!(output.contains("second segment"));
+    }
+
+    #[test]
+    fn test_md_format_with_metadata() {
+        let mut meta = crate::metadata::MediaMetadata {
+            source: crate::metadata::SourceInfo {
+                filename: "test.mp4".to_string(),
+                size_bytes: 999,
+                format: "mp4".to_string(),
+                bitrate: Some(1000000),
+                duration_secs: 10.5,
+            },
+            video: Some(crate::metadata::VideoInfo {
+                codec: "h264".to_string(),
+                width: 1920,
+                height: 1080,
+                fps: Some(30.0),
+                bitrate: Some(2000000),
+            }),
+            audio: Some(crate::metadata::AudioInfo {
+                codec: "aac".to_string(),
+                sample_rate: 48000,
+                channels: 2,
+                bitrate: Some(128000),
+            }),
+            media_tags: std::collections::HashMap::new(),
+        };
+        meta.media_tags
+            .insert("title".to_string(), "Test".to_string());
+
+        let mut user_meta = std::collections::HashMap::new();
+        user_meta.insert("description".to_string(), "A test".to_string());
+
+        let transcript = Transcript {
+            media_metadata: Some(meta),
+            user_metadata: user_meta,
+            ..sample_transcript()
+        };
+        let formatter = MdFormat;
+        let output = formatter.write(&transcript).unwrap();
+
+        // Source info
+        assert!(output.contains("filename: test.mp4"));
+        assert!(output.contains("format: mp4"));
+
+        // Video info
+        assert!(output.contains("codec: h264"));
+        assert!(output.contains("width: 1920"));
+
+        // Audio info
+        assert!(output.contains("sample_rate: 48000"));
+        assert!(output.contains("channels: 2"));
+
+        // Media tags
+        assert!(output.contains("media_tags"));
+        assert!(output.contains("title: Test"));
+
+        // User metadata
+        assert!(output.contains("user_metadata"));
+        assert!(output.contains("description: A test"));
+
+        // Transcription metadata
+        assert!(output.contains("model: base"));
+        assert!(output.contains("duration: 10.0"));
+
+        // Body: no timestamps
+        assert!(output.ends_with("second segment of recognized text.\n\n"));
+        assert!(!output.contains("00:00:00"));
     }
 
     #[test]

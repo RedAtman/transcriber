@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -134,6 +135,7 @@ pub struct Config {
     pub logging: LoggingConfig,
     pub cache: CacheConfig,
     pub inference: InferenceConfig,
+    pub user_metadata: HashMap<String, String>,
 }
 
 impl Default for CacheConfig {
@@ -195,6 +197,7 @@ pub struct CliOverrides {
     pub max_segment_length: Option<u32>,
     pub split_on_word: Option<bool>,
     pub streaming: Option<bool>,
+    pub user_metadata: HashMap<String, String>,
 }
 
 impl Config {
@@ -211,7 +214,12 @@ impl Config {
         }
         if let Some(format) = overrides.format {
             self.output.formats = if format == "all" {
-                vec!["txt".to_string(), "srt".to_string(), "json".to_string()]
+                vec![
+                    "txt".to_string(),
+                    "srt".to_string(),
+                    "json".to_string(),
+                    "md".to_string(),
+                ]
             } else {
                 format.split(',').map(|s| s.trim().to_string()).collect()
             };
@@ -245,6 +253,9 @@ impl Config {
         }
         if let Some(streaming) = overrides.streaming {
             self.output.streaming = streaming;
+        }
+        if !overrides.user_metadata.is_empty() {
+            self.user_metadata = overrides.user_metadata;
         }
         if self.cache.directory.starts_with('~') {
             if let Some(home) = std::env::var_os("HOME") {
@@ -309,7 +320,7 @@ impl Config {
         }
 
         // Validate output formats
-        let valid_formats = ["txt", "srt", "json", "all"];
+        let valid_formats = ["txt", "srt", "json", "md", "all"];
         for fmt in &self.output.formats {
             if !valid_formats.contains(&fmt.as_str()) {
                 errors.push(format!(
@@ -362,9 +373,23 @@ impl Config {
     }
 }
 
+/// Parse a "key=value" string into (key, value), or (key, "") if no '=' present
+fn parse_meta_pair(s: &str) -> (String, String) {
+    if let Some(eq_pos) = s.find('=') {
+        let key = s[..eq_pos].trim().to_string();
+        let value = s[eq_pos + 1..].trim().to_string();
+        (key, value)
+    } else {
+        (s.trim().to_string(), String::new())
+    }
+}
+
 impl From<&crate::cli::Cli> for CliOverrides {
     fn from(cli: &crate::cli::Cli) -> Self {
+        let user_metadata = cli.meta.iter().map(|m| parse_meta_pair(m)).collect();
+
         CliOverrides {
+            user_metadata,
             model: cli.model.clone(),
             language: cli.language.clone(),
             output_dir: cli.output.clone(),

@@ -6,7 +6,7 @@ A fast video transcription CLI tool powered by whisper.cpp. Extracts audio from 
 
 - **Video → Audio → Text**: Automatic audio extraction via FFmpeg
 - **GPU Accelerated**: Metal (macOS M*), Vulkan (NVIDIA), CUDA, or CPU fallback
-- **Multiple Output Formats**: TXT, SRT (subtitle), JSON (with word-level timestamps)
+- **Multiple Output Formats**: TXT, SRT (subtitle), JSON (with word-level timestamps), MD (Markdown with YAML front matter)
 - **Batch Processing**: Transcribe entire directories recursively
 - **Model Quantization**: Q4_K/Q5_K/Q6_K/Q8_0 for speed/size tradeoffs
 - **Configurable**: YAML configuration file with CLI argument overrides
@@ -91,6 +91,18 @@ transcriber -i video.mp4 -m medium -l en --initial-prompt "technology" --tempera
 transcriber -i video.mp4 -m medium -l zh --initial-prompt "科技" --temperature 0.3
 ```
 
+### Media Metadata
+
+```bash
+# Add custom metadata to the output (stored in Markdown YAML front matter)
+transcriber -i video.mp4 --format md --meta title="My Talk" --meta location=Beijing
+
+# Media metadata is auto-detected via ffprobe when using md format:
+#   - source: filename, size, format, bitrate, duration
+#   - video: codec, resolution, FPS
+#   - audio: codec, sample rate, channels
+```
+
 ### Configuration
 
 ```bash
@@ -118,6 +130,7 @@ Default config location: `~/.config/transcriber/config.yaml`
 - **TXT**: Plain text, one segment per line
 - **SRT**: SubRip subtitle format with timestamps
 - **JSON**: Structured data with word-level timing and metadata
+- **MD**: Markdown with YAML front matter — includes auto-detected media metadata (source, video, audio info), custom user metadata, and plain text body (no timestamps)
 
 ## License
 

@@ -249,6 +249,193 @@ fn test_cli_overrides_merge() {
 }
 
 #[test]
+fn test_md_format_output() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashMap;
+    use transcriber::metadata::{AudioInfo, MediaMetadata, SourceInfo, VideoInfo};
+    use transcriber::output::{FormatWriter, MdFormat, Segment, Transcript};
+
+    let meta = MediaMetadata {
+        source: SourceInfo {
+            filename: "video.mp4".to_string(),
+            size_bytes: 12345,
+            format: "mp4".to_string(),
+            bitrate: Some(2000000),
+            duration_secs: 60.0,
+        },
+        video: Some(VideoInfo {
+            codec: "h264".to_string(),
+            width: 1920,
+            height: 1080,
+            fps: Some(30.0),
+            bitrate: Some(1500000),
+        }),
+        audio: Some(AudioInfo {
+            codec: "aac".to_string(),
+            sample_rate: 48000,
+            channels: 2,
+            bitrate: Some(128000),
+        }),
+        media_tags: HashMap::new(),
+    };
+
+    let mut user_meta = HashMap::new();
+    user_meta.insert("location".to_string(), "Beijing".to_string());
+
+    let transcript = Transcript {
+        file: "video.mp4".to_string(),
+        model: "base".to_string(),
+        language: "zh".to_string(),
+        duration: 60.0,
+        segments: vec![Segment {
+            start: 0.0,
+            end: 3.5,
+            text: "Hello world.".to_string(),
+            words: vec![],
+        }],
+        transcribed_at: chrono::Utc::now(),
+        media_metadata: Some(meta),
+        user_metadata: user_meta,
+    };
+
+    let output = MdFormat.write(&transcript)?;
+
+    assert!(
+        output.starts_with("---\n"),
+        "Should start with YAML front matter"
+    );
+    assert!(output.contains("filename: video.mp4"));
+    assert!(output.contains("codec: h264"));
+    assert!(output.contains("channels: 2"));
+    assert!(output.contains("location: Beijing"));
+    assert!(output.contains("---\n\n"), "Should end front matter");
+    assert!(output.contains("Hello world."), "Should contain body text");
+    assert!(
+        !output.contains("00:00:00"),
+        "Should not contain timestamps"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_meta_parsing() {
+    use clap::Parser;
+    use transcriber::cli::Cli;
+    use transcriber::config::CliOverrides;
+
+    let cli = Cli::parse_from([
+        "transcriber",
+        "-i",
+        "test.mp4",
+        "--meta",
+        "key1=value1",
+        "--meta",
+        "key2=value2",
+    ]);
+    let overrides = CliOverrides::from(&cli);
+    assert_eq!(
+        overrides.user_metadata.get("key1"),
+        Some(&"value1".to_string())
+    );
+    assert_eq!(
+        overrides.user_metadata.get("key2"),
+        Some(&"value2".to_string())
+    );
+    assert_eq!(overrides.user_metadata.len(), 2);
+}
+
+#[test]
+fn test_meta_parsing_no_value() {
+    use clap::Parser;
+    use transcriber::cli::Cli;
+    use transcriber::config::CliOverrides;
+
+    let cli = Cli::parse_from(["transcriber", "-i", "test.mp4", "--meta", "flag"]);
+    let overrides = CliOverrides::from(&cli);
+    assert_eq!(overrides.user_metadata.get("flag"), Some(&"".to_string()));
+}
+
+#[test]
+fn test_config_user_metadata_merge() {
+    use transcriber::config::Config;
+
+    let mut config = Config::default();
+    assert!(config.user_metadata.is_empty());
+
+    let overrides = transcriber::config::CliOverrides {
+        user_metadata: [("key1".into(), "val1".into())].into(),
+        ..Default::default()
+    };
+    config.merge_with_cli(overrides);
+    assert_eq!(config.user_metadata.get("key1"), Some(&"val1".to_string()));
+}
+
+#[test]
+fn test_md_null_stripping() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashMap;
+    use transcriber::metadata::{AudioInfo, MediaMetadata, SourceInfo, VideoInfo};
+    use transcriber::output::{FormatWriter, MdFormat, Segment, Transcript};
+
+    // All optional fields set to None — they should not appear in YAML
+    let meta = MediaMetadata {
+        source: SourceInfo {
+            filename: "video.mp4".to_string(),
+            size_bytes: 12345,
+            format: "mp4".to_string(),
+            bitrate: None,
+            duration_secs: 60.0,
+        },
+        video: Some(VideoInfo {
+            codec: "h264".to_string(),
+            width: 1920,
+            height: 1080,
+            fps: None,
+            bitrate: None,
+        }),
+        audio: Some(AudioInfo {
+            codec: "aac".to_string(),
+            sample_rate: 48000,
+            channels: 2,
+            bitrate: None,
+        }),
+        media_tags: HashMap::new(),
+    };
+
+    let transcript = Transcript {
+        file: "video.mp4".to_string(),
+        model: "base".to_string(),
+        language: "en".to_string(),
+        duration: 60.0,
+        segments: vec![Segment {
+            start: 0.0,
+            end: 3.5,
+            text: "Test content.".to_string(),
+            words: vec![],
+        }],
+        transcribed_at: chrono::Utc::now(),
+        media_metadata: Some(meta),
+        user_metadata: HashMap::new(),
+    };
+
+    let output = MdFormat.write(&transcript)?;
+
+    // Should NOT contain null fields
+    assert!(!output.contains("fps:"), "null fps should be stripped");
+    assert!(
+        !output.contains("bitrate:"),
+        "null bitrate should be stripped"
+    );
+
+    // Should still contain non-null fields
+    assert!(output.contains("filename: video.mp4"));
+    assert!(output.contains("codec: h264"));
+    assert!(output.contains("channels: 2"));
+    assert!(output.contains("Test content."));
+
+    Ok(())
+}
+
+#[test]
 fn test_error_type_display() {
     use transcriber::error::AppError;
 

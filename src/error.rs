@@ -29,6 +29,9 @@ pub enum AppError {
         url: String,
         status: Option<u16>,
     },
+    Probe {
+        message: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
@@ -78,6 +81,9 @@ impl fmt::Display for AppError {
                      Ubuntu: sudo apt install ffmpeg\n  \
                      Or ensure ffmpeg is in your PATH."
                 )
+            }
+            AppError::Probe { message } => {
+                write!(f, "Media probe error: {}", message)
             }
             AppError::ModelDownload { model, url, status } => {
                 if let Some(code) = status {
