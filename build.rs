@@ -17,7 +17,12 @@ fn main() {
             // desc: <tag>-<count>-g<hash>[-dirty]
             // Replace tag prefix with CARGO_PKG_VERSION
             if let Some((_, rest)) = desc.split_once('-') {
-                format!("v{pkg_version}-{rest}")
+                // Strip "-0-g<hash>" when on a clean tag (no dirty, count=0)
+                if rest.starts_with("0-") && !rest.ends_with("-dirty") {
+                    format!("v{pkg_version}")
+                } else {
+                    format!("v{pkg_version}-{rest}")
+                }
             } else {
                 format!("v{pkg_version}")
             }
