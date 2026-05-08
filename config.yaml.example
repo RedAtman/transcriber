@@ -30,6 +30,8 @@ output:
   directory: ""
   # Skip files that already have transcript output
   skip_existing: true
+  # Stream output to file during transcription (progressive writes)
+  streaming: true
 
 logging:
   # Log level: trace/debug/info/warn

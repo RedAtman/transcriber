@@ -57,7 +57,15 @@ pub struct OutputConfig {
     pub formats: Vec<String>,
     pub directory: String,
     pub skip_existing: bool,
+    /// Stream output to file during transcription rather than writing at end.
+    /// Uses a custom default to ensure it's `true` when missing from config YAML
+    /// (serde uses Default::default() for missing fields = `false` for bool).
+    #[serde(default = "default_streaming")]
     pub streaming: bool,
+}
+
+fn default_streaming() -> bool {
+    true
 }
 
 impl Default for OutputConfig {
