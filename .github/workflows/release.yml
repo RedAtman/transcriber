@@ -61,3 +61,16 @@ jobs:
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify-tap:
+    name: Signal the Homebrew tap to bump
+    # After every build leg, so the assets the tap hashes already exist.
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      # Signal only: the tap owns its formulae and pulls the release itself,
+      # so no asset checksum or formula text is written from here.
+      - name: Dispatch a formula bump
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: gh api -X POST repos/RedAtman/homebrew-tap/dispatches -f event_type=formula-bump
