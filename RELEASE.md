@@ -2,7 +2,7 @@
 
 ## Overview
 
-Releases are triggered by git tags matching `v*` (e.g., `v0.1.5`). The CI pipeline in `.github/workflows/release.yml` builds binaries for macOS (ARM64 + x86_64), Linux (x86_64), and Windows (x86_64), creates a GitHub Release with auto-generated release notes, and updates the Homebrew tap formula at [RedAtman/homebrew-tap](https://github.com/RedAtman/homebrew-tap).
+Releases are triggered by git tags matching `v*` (e.g., `v0.1.5`). The CI pipeline in `.github/workflows/release.yml` builds binaries for macOS (ARM64 + x86_64), Linux (x86_64), and Windows (x86_64), creates a GitHub Release with auto-generated release notes, and signals [RedAtman/homebrew-tap](https://github.com/RedAtman/homebrew-tap) to bump its formula.
 
 ## Steps
 
@@ -59,7 +59,8 @@ The release workflow:
 - Builds binaries for all platforms (`cargo build --release`)
 - Uploads artifacts to a new GitHub Release
 - Generates release notes from merged PRs
-- Updates the Homebrew formula for `brew install transcriber`
+- Sends a `formula-bump` repository dispatch to the tap, which owns the formula,
+  pulls this release itself, and rewrites the version and checksums there
 
 ## Version String Format
 
